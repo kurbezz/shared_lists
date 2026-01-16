@@ -1,0 +1,13 @@
+target/
+.env
+.git/
+.gitignore
+*.md
+README.md
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Cargo.lock

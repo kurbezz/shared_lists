@@ -34,6 +34,9 @@ async fn main() -> anyhow::Result<()> {
     // Load configuration
     let config = Config::from_env()?;
     tracing::info!("Configuration loaded");
+    tracing::info!("Database URL: {}", config.database_url);
+    tracing::info!("Redirect URI: {}", config.twitch_redirect_uri);
+    tracing::info!("Frontend URL: {}", config.frontend_url);
 
     // Setup database connection pool
     let pool = SqlitePoolOptions::new()

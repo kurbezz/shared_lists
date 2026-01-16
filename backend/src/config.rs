@@ -14,10 +14,13 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> Result<Self, config::ConfigError> {
+        // Load .env file if it exists
         dotenvy::dotenv().ok();
 
         let config = config::Config::builder()
-            .add_source(config::Environment::default())
+            // Support loading from environment variables
+            // This will look for variables like DATABASE_URL, TWITCH_REDIRECT_URI, etc.
+            .add_source(config::Environment::default().convert_case(config::Case::UpperSnake))
             .build()?;
 
         config.try_deserialize()

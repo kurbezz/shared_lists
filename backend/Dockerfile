@@ -1,24 +1,15 @@
 # Build stage
-FROM rust:1.75 as builder
+FROM rust:latest as builder
 
 WORKDIR /app
 
-# Copy manifests
+# Copy manifests and source code
 COPY Cargo.toml Cargo.lock ./
-
-# Create a dummy main.rs to cache dependencies
-RUN mkdir src && \
-    echo "fn main() {}" > src/main.rs && \
-    cargo build --release && \
-    rm -rf src
-
-# Copy source code
 COPY src ./src
 COPY migrations ./migrations
 
 # Build the application
-RUN touch src/main.rs && \
-    cargo build --release
+RUN cargo build --release
 
 # Runtime stage
 FROM debian:bookworm-slim

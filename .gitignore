@@ -5,7 +5,7 @@
 
 # Backend (Rust)
 backend/target/
-backend/Cargo.lock
+
 
 # Frontend (Node.js)
 frontend/node_modules/

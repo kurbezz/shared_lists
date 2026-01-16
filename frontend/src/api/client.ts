@@ -18,7 +18,21 @@ import type {
   PublicPageData,
 } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+// Determine API base URL from browser origin
+// In development: window.location.origin will be http://localhost:5173
+// In production: window.location.origin will be the actual domain
+const getApiBaseUrl = (): string => {
+  // Check if VITE_API_URL is explicitly set (for custom configurations)
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
+  // Use browser's origin + /api path
+  // This works for both development (with Vite proxy) and production
+  return `${window.location.origin}/api`;
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 class ApiClient {
   private async request<T>(

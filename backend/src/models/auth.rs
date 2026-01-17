@@ -19,7 +19,7 @@ pub struct TwitchTokenResponse {
     pub token_type: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct TwitchUser {
     pub id: String,
     pub login: String,

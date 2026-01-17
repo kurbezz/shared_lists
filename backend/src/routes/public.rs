@@ -49,3 +49,64 @@ async fn get_public_page(
         lists: lists_with_items,
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests_utils::setup_db;
+    use crate::models::{CreateUser, CreatePage, CreateList, CreateListItem};
+    use axum::http::{Request, Method};
+    use axum::body::{self, Body};
+    use tower::util::ServiceExt; // for .oneshot()
+
+    #[tokio::test]
+    async fn test_get_public_page_route() -> anyhow::Result<()> {
+        let pool = setup_db().await;
+        let user_repo = crate::repositories::UserRepository::new(pool.clone());
+        let page_repo = crate::repositories::PageRepository::new(pool.clone());
+        let list_repo = crate::repositories::ListRepository::new(pool.clone());
+
+        // Create data: user, page, list, items
+        let creator = user_repo
+            .create(CreateUser {
+                twitch_id: "pub1".to_string(),
+                username: "pubuser".to_string(),
+                display_name: None,
+                profile_image_url: None,
+                email: None,
+            })
+            .await?;
+
+        let page = page_repo
+            .create(creator.id, CreatePage { title: "PubPage".to_string(), description: None })
+            .await?;
+
+        // set public slug
+        page_repo.set_public_slug(page.id, Some("public-slug".to_string())).await?;
+
+        let list = list_repo.create_list(page.id, CreateList { title: "L".to_string(), position: None }).await?;
+        list_repo.create_item(list.id, CreateListItem { content: "it1".to_string(), position: None }).await?;
+
+        // Build router
+        let state = PublicRouterState { page_repo: std::sync::Arc::new(page_repo), list_repo: std::sync::Arc::new(list_repo) };
+        let app = public_router(state);
+
+        // Make request
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/public/public-slug")
+            .body(Body::empty())?;
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let bytes = body::to_bytes(resp.into_body(), 64 * 1024).await?;
+        let json: serde_json::Value = serde_json::from_slice(&bytes)?;
+        assert_eq!(json["page"]["public_slug"].as_str(), Some("public-slug"));
+        assert_eq!(json["lists"].as_array().map(|a| a.len()), Some(1));
+        assert_eq!(json["lists"][0]["items"].as_array().map(|a| a.len()), Some(1));
+
+        Ok(())
+    }
+}
+

@@ -9,6 +9,7 @@ interface AuthContextType {
   logout: () => void;
   isAuthenticated: boolean;
   isLoading: boolean;
+  refreshUser?: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -48,6 +49,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   });
   const isLoading = false;
 
+  const refreshUser = async () => {
+    try {
+      // dynamic import to avoid circular dependency issues
+      const { apiClient } = await import('../api/client');
+      const data = await apiClient.getCurrentUser();
+      setUser(data);
+    } catch (e) {
+      console.error('Failed to refresh user:', e);
+    }
+  };
+
   useEffect(() => {
     // Already initialized from localStorage in useState initializers
     // This effect is now empty or can be removed if not needed for anything else.
@@ -69,6 +81,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('Failed to decode token:', error);
     }
+
+    // try to refresh full user info after login
+    (async () => {
+      try {
+        await refreshUser();
+      } catch (e) {
+        // ignore
+      }
+    })();
   }, []);
 
   const logout = useCallback(() => {
@@ -84,6 +105,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     logout,
     isAuthenticated: !!token,
     isLoading,
+    refreshUser,
   }), [user, token, login, logout, isLoading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

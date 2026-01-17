@@ -217,3 +217,76 @@ impl ListRepository {
         Ok(page_id)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests_utils::setup_db;
+    use crate::models::{CreateUser, CreatePage, CreateList, CreateListItem};
+
+    #[tokio::test]
+    async fn test_list_and_items_crud() -> anyhow::Result<()> {
+        let pool = setup_db().await;
+        let user_repo = crate::repositories::UserRepository::new(pool.clone());
+        let page_repo = crate::repositories::PageRepository::new(pool.clone());
+        let repo = ListRepository::new(pool.clone());
+
+        // Create user and page
+        let creator = user_repo
+            .create(CreateUser {
+                twitch_id: "u1".to_string(),
+                username: "u1".to_string(),
+                display_name: None,
+                profile_image_url: None,
+                email: None,
+            })
+            .await?;
+
+        let page = page_repo
+            .create(creator.id, CreatePage { title: "P".to_string(), description: None })
+            .await?;
+
+        // Create lists
+        let l1 = repo
+            .create_list(page.id, CreateList { title: "L1".to_string(), position: None })
+            .await?;
+        let l2 = repo
+            .create_list(page.id, CreateList { title: "L2".to_string(), position: None })
+            .await?;
+
+        let lists = repo.list_by_page_id(page.id).await?;
+        assert_eq!(lists.len(), 2);
+        assert_eq!(lists[0].title, "L1");
+        assert_eq!(lists[1].title, "L2");
+
+        // Create items
+        let i1 = repo.create_item(l1.id, CreateListItem { content: "a".to_string(), position: None }).await?;
+        let i2 = repo.create_item(l1.id, CreateListItem { content: "b".to_string(), position: None }).await?;
+
+        let items = repo.list_items_by_list_id(l1.id).await?;
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].content, "a");
+        assert_eq!(items[1].content, "b");
+
+        // Update list
+        let updated_list = repo.update_list(l2.id, page.id, crate::models::UpdateList { title: Some("L2-new".to_string()), position: Some(0)}).await?.expect("list exists");
+        assert_eq!(updated_list.title, "L2-new");
+
+        // Update item
+        let updated_item = repo.update_item(i1.id, l1.id, crate::models::UpdateListItem{ content: Some("a-up".to_string()), checked: Some(true), position: Some(1)}).await?.expect("item exists");
+        assert_eq!(updated_item.content, "a-up");
+        assert!(updated_item.checked);
+
+        // Delete item and list
+        repo.delete_item(i2.id, l1.id).await?;
+        let item_opt = repo.find_item_by_id(i2.id, l1.id).await?;
+        assert!(item_opt.is_none());
+
+        repo.delete_list(l1.id, page.id).await?;
+        let list_opt = repo.find_by_id(l1.id, page.id).await?;
+        assert!(list_opt.is_none());
+
+        Ok(())
+    }
+}
+

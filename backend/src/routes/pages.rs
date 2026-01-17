@@ -334,3 +334,339 @@ async fn revoke_permission(
 
     Ok(StatusCode::NO_CONTENT)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests_utils::setup_db;
+    use crate::models::{CreateUser, CreatePage};
+    use crate::services::AuthService;
+    use axum::http::{Request, Method};
+    use axum::body::{self, Body};
+    use tower::util::ServiceExt;
+
+    // Helper to create a test user and JWT
+    async fn create_test_user_with_jwt(
+        pool: &sqlx::SqlitePool,
+        twitch_id: &str,
+        username: &str,
+    ) -> anyhow::Result<(crate::models::User, String)> {
+        let user_repo = crate::repositories::UserRepository::new(pool.clone());
+        let auth_service = AuthService::new(
+            "test_secret".to_string(),
+            "test_client".to_string(),
+            "test_secret".to_string(),
+            user_repo.clone(),
+        );
+
+        let user = user_repo
+            .create(CreateUser {
+                twitch_id: twitch_id.to_string(),
+                username: username.to_string(),
+                display_name: None,
+                profile_image_url: None,
+                email: None,
+            })
+            .await?;
+
+        let jwt = auth_service.create_jwt(&user)?;
+        Ok((user, jwt))
+    }
+
+    #[tokio::test]
+    async fn test_create_and_list_pages() -> anyhow::Result<()> {
+        let pool = setup_db().await;
+        let page_repo = Arc::new(crate::repositories::PageRepository::new(pool.clone()));
+        let (user, _jwt) = create_test_user_with_jwt(&pool, "tw1", "user1").await?;
+
+        let state = PagesRouterState {
+            page_repo: page_repo.clone(),
+        };
+        let app = pages_router(state);
+
+        // Create a page
+        let create_payload = serde_json::json!({
+            "title": "Test Page",
+            "description": "A test page"
+        });
+
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri("/pages")
+            .header("content-type", "application/json")
+            .extension(Claims {
+                sub: user.id.to_string(),
+                twitch_id: user.twitch_id.clone(),
+                username: user.username.clone(),
+                exp: 9999999999,
+            })
+            .body(Body::from(serde_json::to_vec(&create_payload)?))?;
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let bytes = body::to_bytes(resp.into_body(), 64 * 1024).await?;
+        let created_page: serde_json::Value = serde_json::from_slice(&bytes)?;
+        assert_eq!(created_page["title"].as_str(), Some("Test Page"));
+
+        // List pages
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/pages")
+            .extension(Claims {
+                sub: user.id.to_string(),
+                twitch_id: user.twitch_id.clone(),
+                username: user.username.clone(),
+                exp: 9999999999,
+            })
+            .body(Body::empty())?;
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let bytes = body::to_bytes(resp.into_body(), 64 * 1024).await?;
+        let pages: Vec<serde_json::Value> = serde_json::from_slice(&bytes)?;
+        assert_eq!(pages.len(), 1);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_update_and_delete_page() -> anyhow::Result<()> {
+        let pool = setup_db().await;
+        let page_repo = Arc::new(crate::repositories::PageRepository::new(pool.clone()));
+        let (user, _jwt) = create_test_user_with_jwt(&pool, "tw2", "user2").await?;
+
+        // Create page directly
+        let page = page_repo
+            .create(
+                user.id,
+                CreatePage {
+                    title: "Original".to_string(),
+                    description: None,
+                },
+            )
+            .await?;
+
+        // Update page
+        let update_payload = serde_json::json!({
+            "title": "Updated Title"
+        });
+
+        let state = PagesRouterState {
+            page_repo: page_repo.clone(),
+        };
+        let app = pages_router(state.clone());
+
+        let req = Request::builder()
+            .method(Method::PATCH)
+            .uri(format!("/pages/{}", page.id))
+            .header("content-type", "application/json")
+            .extension(Claims {
+                sub: user.id.to_string(),
+                twitch_id: user.twitch_id.clone(),
+                username: user.username.clone(),
+                exp: 9999999999,
+            })
+            .body(Body::from(serde_json::to_vec(&update_payload)?))?;
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let bytes = body::to_bytes(resp.into_body(), 64 * 1024).await?;
+        let updated: serde_json::Value = serde_json::from_slice(&bytes)?;
+        assert_eq!(updated["title"].as_str(), Some("Updated Title"));
+
+        // Delete page - create a new app instance
+        let app = pages_router(state);
+
+        let req = Request::builder()
+            .method(Method::DELETE)
+            .uri(format!("/pages/{}", page.id))
+            .extension(Claims {
+                sub: user.id.to_string(),
+                twitch_id: user.twitch_id.clone(),
+                username: user.username.clone(),
+                exp: 9999999999,
+            })
+            .body(Body::empty())?;
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 204);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_set_public_slug() -> anyhow::Result<()> {
+        let pool = setup_db().await;
+        let page_repo = Arc::new(crate::repositories::PageRepository::new(pool.clone()));
+        let (user, _jwt) = create_test_user_with_jwt(&pool, "tw3", "user3").await?;
+
+        let page = page_repo
+            .create(user.id, CreatePage {
+                title: "Public Page".to_string(),
+                description: None,
+            })
+            .await?;
+
+        let state = PagesRouterState {
+            page_repo: page_repo.clone(),
+        };
+        let app = pages_router(state);
+
+        // Set public slug
+        let slug_payload = serde_json::json!({
+            "public_slug": "my-public-page"
+        });
+
+        let req = Request::builder()
+            .method(Method::PUT)
+            .uri(format!("/pages/{}/public-slug", page.id))
+            .header("content-type", "application/json")
+            .extension(Claims {
+                sub: user.id.to_string(),
+                twitch_id: user.twitch_id.clone(),
+                username: user.username.clone(),
+                exp: 9999999999,
+            })
+            .body(Body::from(serde_json::to_vec(&slug_payload)?))?;
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let bytes = body::to_bytes(resp.into_body(), 64 * 1024).await?;
+        let updated: serde_json::Value = serde_json::from_slice(&bytes)?;
+        assert_eq!(updated["public_slug"].as_str(), Some("my-public-page"));
+
+        // Test invalid slug format
+        let invalid_slug = serde_json::json!({
+            "public_slug": "INVALID_SLUG"
+        });
+
+        let req = Request::builder()
+            .method(Method::PUT)
+            .uri(format!("/pages/{}/public-slug", page.id))
+            .header("content-type", "application/json")
+            .extension(Claims {
+                sub: user.id.to_string(),
+                twitch_id: user.twitch_id.clone(),
+                username: user.username.clone(),
+                exp: 9999999999,
+            })
+            .body(Body::from(serde_json::to_vec(&invalid_slug)?))?;
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 400);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_permissions_workflow() -> anyhow::Result<()> {
+        let pool = setup_db().await;
+        let page_repo = Arc::new(crate::repositories::PageRepository::new(pool.clone()));
+        let (owner, _) = create_test_user_with_jwt(&pool, "owner", "owner").await?;
+        let (other_user, _) = create_test_user_with_jwt(&pool, "other", "other").await?;
+
+        let page = page_repo
+            .create(owner.id, CreatePage {
+                title: "Shared Page".to_string(),
+                description: None,
+            })
+            .await?;
+
+        let state = PagesRouterState {
+            page_repo: page_repo.clone(),
+        };
+        
+        // Grant permission
+        let grant_payload = serde_json::json!({
+            "user_id": other_user.id.to_string(),
+            "can_edit": true
+        });
+
+        let app = pages_router(state.clone());
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri(format!("/pages/{}/permissions", page.id))
+            .header("content-type", "application/json")
+            .extension(Claims {
+                sub: owner.id.to_string(),
+                twitch_id: owner.twitch_id.clone(),
+                username: owner.username.clone(),
+                exp: 9999999999,
+            })
+            .body(Body::from(serde_json::to_vec(&grant_payload)?))?;
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let bytes = body::to_bytes(resp.into_body(), 64 * 1024).await?;
+        let perm: serde_json::Value = serde_json::from_slice(&bytes)?;
+        
+        // The response is PagePermissionWithUser, which has both permission fields and user
+        let permission_id = perm["id"].as_str().unwrap().to_string();
+        assert_eq!(perm["can_edit"].as_bool(), Some(true));
+
+        // List permissions
+        let app = pages_router(state.clone());
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri(format!("/pages/{}/permissions", page.id))
+            .extension(Claims {
+                sub: owner.id.to_string(),
+                twitch_id: owner.twitch_id.clone(),
+                username: owner.username.clone(),
+                exp: 9999999999,
+            })
+            .body(Body::empty())?;
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let bytes = body::to_bytes(resp.into_body(), 64 * 1024).await?;
+        let perms: Vec<serde_json::Value> = serde_json::from_slice(&bytes)?;
+        assert_eq!(perms.len(), 1);
+
+        // Update permission
+        let update_payload = serde_json::json!({
+            "can_edit": false
+        });
+
+        let app = pages_router(state.clone());
+        let req = Request::builder()
+            .method(Method::PATCH)
+            .uri(format!("/pages/{}/permissions/{}", page.id, permission_id))
+            .header("content-type", "application/json")
+            .extension(Claims {
+                sub: owner.id.to_string(),
+                twitch_id: owner.twitch_id.clone(),
+                username: owner.username.clone(),
+                exp: 9999999999,
+            })
+            .body(Body::from(serde_json::to_vec(&update_payload)?))?;
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+
+        // Revoke permission
+        let app = pages_router(state);
+        let req = Request::builder()
+            .method(Method::DELETE)
+            .uri(format!("/pages/{}/permissions/{}", page.id, permission_id))
+            .extension(Claims {
+                sub: owner.id.to_string(),
+                twitch_id: owner.twitch_id.clone(),
+                username: owner.username.clone(),
+                exp: 9999999999,
+            })
+            .body(Body::empty())?;
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 204);
+
+        Ok(())
+    }
+}
+

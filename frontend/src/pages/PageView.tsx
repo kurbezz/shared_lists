@@ -12,12 +12,15 @@ import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, Trash2, Plus, Loader2, Check } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useTranslation } from 'react-i18next';
+import UserMenu from '../components/UserMenu';
+import { useToast } from '@/components/ui/toast';
 
 export const PageView: React.FC = () => {
   const { t } = useTranslation();
   const { pageId } = useParams<{ pageId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { notify } = useToast();
 
   const [newListTitle, setNewListTitle] = useState('');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -49,7 +52,7 @@ export const PageView: React.FC = () => {
   useEffect(() => {
     if (pageError) {
       console.error('Failed to load page:', pageError);
-      alert(t('page.load_error'));
+      notify(t('page.load_error'));
       navigate('/');
     }
   }, [pageError, navigate, t]);
@@ -63,7 +66,7 @@ export const PageView: React.FC = () => {
     },
     onError: (error) => {
       console.error('Failed to create list:', error);
-      alert(t('page.create_list_error'));
+      notify(t('page.create_list_error'));
     },
   });
 
@@ -75,7 +78,7 @@ export const PageView: React.FC = () => {
     },
     onError: (error) => {
       console.error('Failed to update list:', error);
-      alert(t('page.update_list_error'));
+      notify(t('page.update_list_error'));
     },
   });
 
@@ -86,7 +89,7 @@ export const PageView: React.FC = () => {
     },
     onError: (error) => {
       console.error('Failed to delete list:', error);
-      alert(t('page.delete_list_error'));
+      notify(t('page.delete_list_error'));
     },
   });
 
@@ -101,7 +104,7 @@ export const PageView: React.FC = () => {
     },
     onError: (error) => {
       console.error('Failed to update page:', error);
-      alert(t('page.update_title_error'));
+      notify(t('page.update_title_error'));
     },
   });
 
@@ -113,7 +116,7 @@ export const PageView: React.FC = () => {
     },
     onError: (error) => {
       console.error('Failed to delete page:', error);
-      alert(t('dashboard.delete_error'));
+      notify(t('dashboard.delete_error'));
     },
   });
 
@@ -274,37 +277,41 @@ export const PageView: React.FC = () => {
               </div>
             </div>
 
-            {page.is_creator && (
-              <div className="flex gap-2">
-                <ShareDialog page={page} />
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="destructive" size="sm" data-cy="delete-page-btn">
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      {t('page.delete_page')}
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>{t('dashboard.delete_confirm_title')}</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        {t('dashboard.delete_confirm_description')}
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={handleDeletePage}
-                        variant="destructive"
-                        data-cy="confirm-delete-page-btn"
-                      >
-                        {t('common.delete')}
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              {page.is_creator && (
+                <div className="flex gap-2">
+                  <ShareDialog page={page} />
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="sm" data-cy="delete-page-btn">
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        {t('page.delete_page')}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>{t('dashboard.delete_confirm_title')}</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {t('dashboard.delete_confirm_description')}
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={handleDeletePage}
+                          variant="destructive"
+                          data-cy="confirm-delete-page-btn"
+                        >
+                          {t('common.delete')}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              )}
+
+              <UserMenu />
+            </div>
           </div>
         </div>
       </div>

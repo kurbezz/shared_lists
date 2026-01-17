@@ -69,6 +69,40 @@ impl UserRepository {
         Ok(user)
     }
 
+    pub async fn find_by_id(&self, id: Uuid) -> Result<Option<User>> {
+        let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(user)
+    }
+
+    pub async fn update_by_id(
+        &self,
+        id: Uuid,
+        username: &str,
+        display_name: Option<&str>,
+        profile_image_url: Option<&str>,
+        email: Option<String>,
+    ) -> Result<User> {
+        let user = sqlx::query_as::<_, User>(
+            r#"
+            UPDATE users
+            SET username = $1, display_name = $2, profile_image_url = $3, email = $4
+            WHERE id = $5
+            RETURNING *
+            "#,
+        )
+        .bind(username)
+        .bind(display_name)
+        .bind(profile_image_url)
+        .bind(email)
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(user)
+    }
+
     pub async fn search(&self, query: &str, exclude_id: Uuid) -> Result<Vec<User>> {
         let search_pattern = format!("%{}%", query);
         let users = sqlx::query_as::<_, User>(
@@ -86,3 +120,55 @@ impl UserRepository {
         Ok(users)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests_utils::setup_db;
+    use crate::models::CreateUser;
+
+    #[tokio::test]
+    async fn test_create_find_update_search_user() -> anyhow::Result<()> {
+        let pool = setup_db().await;
+        let repo = UserRepository::new(pool.clone());
+
+        // Create user
+        let create = CreateUser {
+            twitch_id: "t123".to_string(),
+            username: "tester".to_string(),
+            display_name: Some("Test User".to_string()),
+            profile_image_url: None,
+            email: Some("test@example.com".to_string()),
+        };
+
+        let user = repo.create(create).await?;
+        assert_eq!(user.twitch_id, "t123");
+        assert_eq!(user.username, "tester");
+
+        // Find by twitch id
+        let found = repo.find_by_twitch_id(&user.twitch_id).await?;
+        assert!(found.is_some());
+        let found = found.unwrap();
+        assert_eq!(found.id, user.id);
+
+        // Update twitch info
+        let updated = repo
+            .update_twitch_info(
+                &user.twitch_id,
+                "tester2",
+                "Tester 2",
+                "http://image",
+                None,
+            )
+            .await?;
+        assert_eq!(updated.username, "tester2");
+        assert_eq!(updated.display_name.as_deref(), Some("Tester 2"));
+
+        // Search (excluding the user itself should return empty)
+        let results = repo.search("tester2", user.id).await?;
+        assert!(results.is_empty());
+
+        Ok(())
+    }
+}
+

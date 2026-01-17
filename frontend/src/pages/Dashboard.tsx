@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
+import UserMenu from '../components/UserMenu';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -10,14 +11,16 @@ import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/comp
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, LogOut, Trash2, Loader2, ArrowRight } from 'lucide-react';
+import { useToast } from '@/components/ui/toast';
+import { Plus, Trash2, Loader2, ArrowRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 export const Dashboard: React.FC = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { notify } = useToast();
 
   // Queries
   const { data: pages = [], isLoading } = useQuery({
@@ -36,7 +39,7 @@ export const Dashboard: React.FC = () => {
     },
     onError: (error) => {
       console.error('Failed to create page:', error);
-      alert(t('dashboard.create_error'));
+      notify(t('dashboard.create_error'));
     },
   });
 
@@ -48,7 +51,7 @@ export const Dashboard: React.FC = () => {
     },
     onError: (error) => {
       console.error('Failed to delete page:', error);
-      alert(t('dashboard.delete_error'));
+      notify(t('dashboard.delete_error'));
     },
   });
 
@@ -90,15 +93,9 @@ export const Dashboard: React.FC = () => {
                 </p>
               )}
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={logout}
-              className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              {t('dashboard.logout')}
-            </Button>
+            <div className="flex items-center gap-2">
+              <UserMenu />
+            </div>
           </div>
         </div>
       </div>

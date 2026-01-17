@@ -281,3 +281,303 @@ async fn delete_item(
 
     Ok(StatusCode::NO_CONTENT)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests_utils::setup_db;
+    use crate::models::{CreateUser, CreatePage};
+    use axum::http::{Request, Method};
+    use axum::body::{self, Body};
+    use tower::util::ServiceExt;
+
+    async fn create_test_user(
+        pool: &sqlx::SqlitePool,
+        twitch_id: &str,
+        username: &str,
+    ) -> anyhow::Result<crate::models::User> {
+        let user_repo = crate::repositories::UserRepository::new(pool.clone());
+        user_repo
+            .create(CreateUser {
+                twitch_id: twitch_id.to_string(),
+                username: username.to_string(),
+                display_name: None,
+                profile_image_url: None,
+                email: None,
+            })
+            .await
+    }
+
+    fn create_claims(user: &crate::models::User) -> Claims {
+        Claims {
+            sub: user.id.to_string(),
+            twitch_id: user.twitch_id.clone(),
+            username: user.username.clone(),
+            exp: 9999999999,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_and_list_lists() -> anyhow::Result<()> {
+        let pool = setup_db().await;
+        let user = create_test_user(&pool, "tw1", "user1").await?;
+        
+        let page_repo = Arc::new(crate::repositories::PageRepository::new(pool.clone()));
+        let list_repo = Arc::new(crate::repositories::ListRepository::new(pool.clone()));
+
+        // Create a page
+        let page = page_repo
+            .create(user.id, CreatePage {
+                title: "Test Page".to_string(),
+                description: None,
+            })
+            .await?;
+
+        let state = ListsRouterState {
+            page_repo,
+            list_repo,
+        };
+        let app = lists_router(state);
+        let claims = create_claims(&user);
+
+        // Create a list
+        let create_payload = serde_json::json!({
+            "title": "Shopping List",
+            "position": null
+        });
+
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri(format!("/pages/{}/lists", page.id))
+            .header("content-type", "application/json")
+            .extension(claims.clone())
+            .body(Body::from(serde_json::to_vec(&create_payload)?))?;
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let bytes = body::to_bytes(resp.into_body(), 64 * 1024).await?;
+        let created_list: serde_json::Value = serde_json::from_slice(&bytes)?;
+        assert_eq!(created_list["title"].as_str(), Some("Shopping List"));
+
+        // List all lists
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri(format!("/pages/{}/lists", page.id))
+            .extension(claims)
+            .body(Body::empty())?;
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let bytes = body::to_bytes(resp.into_body(), 64 * 1024).await?;
+        let lists: Vec<serde_json::Value> = serde_json::from_slice(&bytes)?;
+        assert_eq!(lists.len(), 1);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_update_and_delete_list() -> anyhow::Result<()> {
+        let pool = setup_db().await;
+        let user = create_test_user(&pool, "tw2", "user2").await?;
+        
+        let page_repo = Arc::new(crate::repositories::PageRepository::new(pool.clone()));
+        let list_repo = Arc::new(crate::repositories::ListRepository::new(pool.clone()));
+
+        let page = page_repo
+            .create(user.id, CreatePage {
+                title: "Page".to_string(),
+                description: None,
+            })
+            .await?;
+
+        let list = list_repo
+            .create_list(page.id, crate::models::CreateList {
+                title: "Old Title".to_string(),
+                position: None,
+            })
+            .await?;
+
+        let state = ListsRouterState {
+            page_repo,
+            list_repo,
+        };
+        let app = lists_router(state);
+        let claims = create_claims(&user);
+
+        // Update list
+        let update_payload = serde_json::json!({
+            "title": "New Title"
+        });
+
+        let req = Request::builder()
+            .method(Method::PATCH)
+            .uri(format!("/pages/{}/lists/{}", page.id, list.id))
+            .header("content-type", "application/json")
+            .extension(claims.clone())
+            .body(Body::from(serde_json::to_vec(&update_payload)?))?;
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let bytes = body::to_bytes(resp.into_body(), 64 * 1024).await?;
+        let updated: serde_json::Value = serde_json::from_slice(&bytes)?;
+        assert_eq!(updated["title"].as_str(), Some("New Title"));
+
+        // Delete list
+        let req = Request::builder()
+            .method(Method::DELETE)
+            .uri(format!("/pages/{}/lists/{}", page.id, list.id))
+            .extension(claims)
+            .body(Body::empty())?;
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 204);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_items_crud() -> anyhow::Result<()> {
+        let pool = setup_db().await;
+        let user = create_test_user(&pool, "tw3", "user3").await?;
+        
+        let page_repo = Arc::new(crate::repositories::PageRepository::new(pool.clone()));
+        let list_repo = Arc::new(crate::repositories::ListRepository::new(pool.clone()));
+
+        let page = page_repo
+            .create(user.id, CreatePage {
+                title: "Page".to_string(),
+                description: None,
+            })
+            .await?;
+
+        let list = list_repo
+            .create_list(page.id, crate::models::CreateList {
+                title: "List".to_string(),
+                position: None,
+            })
+            .await?;
+
+        let state = ListsRouterState {
+            page_repo,
+            list_repo,
+        };
+        let app = lists_router(state);
+        let claims = create_claims(&user);
+
+        // Create item
+        let create_payload = serde_json::json!({
+            "content": "Buy milk",
+            "position": null
+        });
+
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri(format!("/lists/{}/items", list.id))
+            .header("content-type", "application/json")
+            .extension(claims.clone())
+            .body(Body::from(serde_json::to_vec(&create_payload)?))?;
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let bytes = body::to_bytes(resp.into_body(), 64 * 1024).await?;
+        let created_item: serde_json::Value = serde_json::from_slice(&bytes)?;
+        assert_eq!(created_item["content"].as_str(), Some("Buy milk"));
+        let item_id = created_item["id"].as_str().unwrap();
+
+        // List items
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri(format!("/lists/{}/items", list.id))
+            .extension(claims.clone())
+            .body(Body::empty())?;
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let bytes = body::to_bytes(resp.into_body(), 64 * 1024).await?;
+        let items: Vec<serde_json::Value> = serde_json::from_slice(&bytes)?;
+        assert_eq!(items.len(), 1);
+
+        // Update item
+        let update_payload = serde_json::json!({
+            "content": "Buy bread",
+            "checked": true
+        });
+
+        let req = Request::builder()
+            .method(Method::PATCH)
+            .uri(format!("/lists/{}/items/{}", list.id, item_id))
+            .header("content-type", "application/json")
+            .extension(claims.clone())
+            .body(Body::from(serde_json::to_vec(&update_payload)?))?;
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let bytes = body::to_bytes(resp.into_body(), 64 * 1024).await?;
+        let updated: serde_json::Value = serde_json::from_slice(&bytes)?;
+        assert_eq!(updated["content"].as_str(), Some("Buy bread"));
+        assert_eq!(updated["checked"].as_bool(), Some(true));
+
+        // Delete item
+        let req = Request::builder()
+            .method(Method::DELETE)
+            .uri(format!("/lists/{}/items/{}", list.id, item_id))
+            .extension(claims)
+            .body(Body::empty())?;
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 204);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_access_control() -> anyhow::Result<()> {
+        let pool = setup_db().await;
+        let owner = create_test_user(&pool, "owner", "owner").await?;
+        let other = create_test_user(&pool, "other", "other").await?;
+        
+        let page_repo = Arc::new(crate::repositories::PageRepository::new(pool.clone()));
+        let list_repo = Arc::new(crate::repositories::ListRepository::new(pool.clone()));
+
+        let page = page_repo
+            .create(owner.id, CreatePage {
+                title: "Private Page".to_string(),
+                description: None,
+            })
+            .await?;
+
+        let _list = list_repo
+            .create_list(page.id, crate::models::CreateList {
+                title: "List".to_string(),
+                position: None,
+            })
+            .await?;
+
+        let state = ListsRouterState {
+            page_repo,
+            list_repo,
+        };
+        let app = lists_router(state);
+        
+        // Try to access as unauthorized user
+        let other_claims = create_claims(&other);
+
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri(format!("/pages/{}/lists", page.id))
+            .extension(other_claims)
+            .body(Body::empty())?;
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 403); // Forbidden
+
+        Ok(())
+    }
+}
+

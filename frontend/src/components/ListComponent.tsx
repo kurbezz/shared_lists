@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Plus, Pencil, Trash2, Check, X, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useToast } from '@/components/ui/toast';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 interface ListComponentProps {
   list: List;
@@ -24,9 +26,11 @@ export const ListComponent: React.FC<ListComponentProps> = ({
 }) => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const { notify } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(list.title);
   const [newItemContent, setNewItemContent] = useState('');
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   // Queries
   const { data: items = [], isLoading } = useQuery({
@@ -43,7 +47,7 @@ export const ListComponent: React.FC<ListComponentProps> = ({
     },
     onError: (error) => {
       console.error('Failed to create item:', error);
-      alert(t('list.create_error'));
+      notify(t('list.create_error'));
     },
   });
 
@@ -55,7 +59,7 @@ export const ListComponent: React.FC<ListComponentProps> = ({
     },
     onError: (error) => {
       console.error('Failed to update item:', error);
-      alert(t('list.update_error'));
+      notify(t('list.update_error'));
     },
   });
 
@@ -66,7 +70,7 @@ export const ListComponent: React.FC<ListComponentProps> = ({
     },
     onError: (error) => {
       console.error('Failed to delete item:', error);
-      alert(t('list.delete_error'));
+      notify(t('list.delete_error'));
     },
   });
 
@@ -96,8 +100,7 @@ export const ListComponent: React.FC<ListComponentProps> = ({
   };
 
   const handleDeleteList = async () => {
-    if (!window.confirm(t('list.delete_confirm'))) return;
-    await onDelete(list.id);
+    setIsDeleteOpen(true);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -223,6 +226,32 @@ export const ListComponent: React.FC<ListComponentProps> = ({
           </div>
         </CardFooter>
       )}
+
+      <AlertDialog open={isDeleteOpen} onOpenChange={(open) => !open && setIsDeleteOpen(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('dashboard.delete_confirm_title')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('list.delete_confirm')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                setIsDeleteOpen(false);
+                try {
+                  await onDelete(list.id);
+                } catch (error) {
+                  console.error('Failed to delete list:', error);
+                  notify(t('list.delete_error'));
+                }
+              }}
+              data-cy="confirm-delete-list-btn"
+            >
+              {t('common.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 };

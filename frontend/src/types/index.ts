@@ -105,6 +105,13 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface UpdateUser {
+  username?: string;
+  display_name?: string | null;
+  profile_image_url?: string | null;
+  email?: string | null;
+}
+
 export interface SetPublicSlug {
   public_slug: string | null;
 }

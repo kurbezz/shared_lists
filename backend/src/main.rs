@@ -6,6 +6,10 @@ mod repositories;
 mod routes;
 mod services;
 
+// Test-only helpers
+#[cfg(test)]
+mod tests_utils;
+
 use crate::config::Config;
 use crate::middleware::{auth_middleware, AuthState};
 use crate::repositories::{ListRepository, PageRepository, UserRepository};

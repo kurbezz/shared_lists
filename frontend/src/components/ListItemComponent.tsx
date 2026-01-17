@@ -3,6 +3,8 @@ import type { ListItem, UpdateListItem } from '../types';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useToast } from '@/components/ui/toast';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Pencil, Trash2, Check, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
@@ -21,9 +23,11 @@ export const ListItemComponent: React.FC<ListItemComponentProps> = ({
   onDelete,
 }) => {
   const { t } = useTranslation();
+  const { notify } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(item.content);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   const handleCheckToggle = async (checked: boolean) => {
     if (!canEdit) return;
@@ -45,15 +49,18 @@ export const ListItemComponent: React.FC<ListItemComponentProps> = ({
   };
 
   const handleDelete = async () => {
-    // I could use AlertDialog here too, but for items it might be too heavy.
-    // Keeping window.confirm or implementing simple confirm.
-    if (!window.confirm(t('list.delete_item_confirm'))) return;
+    setIsDeleteOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    setIsDeleteOpen(false);
     setIsDeleting(true);
     try {
       await onDelete(item.id);
     } catch (error) {
       setIsDeleting(false);
       console.error('Failed to delete item:', error);
+      notify(t('list.delete_error'));
     }
   };
 
@@ -145,6 +152,19 @@ export const ListItemComponent: React.FC<ListItemComponentProps> = ({
           )}
         </div>
       )}
+
+      <AlertDialog open={isDeleteOpen} onOpenChange={(open) => !open && setIsDeleteOpen(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('dashboard.delete_confirm_title')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('list.delete_item_confirm')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} data-cy="confirm-delete-item-btn">{t('common.delete')}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

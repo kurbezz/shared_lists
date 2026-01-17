@@ -143,3 +143,150 @@ impl AuthService {
 
 
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests_utils::setup_db;
+    use crate::models::CreateUser;
+
+    #[tokio::test]
+    async fn test_jwt_creation_and_verification() -> anyhow::Result<()> {
+        let pool = setup_db().await;
+        let user_repo = UserRepository::new(pool.clone());
+        let auth_service = AuthService::new(
+            "test_secret_key".to_string(),
+            "test_client_id".to_string(),
+            "test_client_secret".to_string(),
+            user_repo.clone(),
+        );
+
+        // Create a test user
+        let user = user_repo
+            .create(CreateUser {
+                twitch_id: "twitch123".to_string(),
+                username: "testuser".to_string(),
+                display_name: Some("Test User".to_string()),
+                profile_image_url: None,
+                email: Some("test@example.com".to_string()),
+            })
+            .await?;
+
+        // Create JWT
+        let jwt = auth_service.create_jwt(&user)?;
+        assert!(!jwt.is_empty());
+
+        // Verify JWT
+        let claims = auth_service.verify_jwt(&jwt)?;
+        assert_eq!(claims.sub, user.id.to_string());
+        assert_eq!(claims.twitch_id, user.twitch_id);
+        assert_eq!(claims.username, user.username);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_jwt_verification_fails_with_wrong_secret() -> anyhow::Result<()> {
+        let pool = setup_db().await;
+        let user_repo = UserRepository::new(pool.clone());
+        let auth_service1 = AuthService::new(
+            "secret1".to_string(),
+            "client_id".to_string(),
+            "client_secret".to_string(),
+            user_repo.clone(),
+        );
+        let auth_service2 = AuthService::new(
+            "secret2".to_string(),
+            "client_id".to_string(),
+            "client_secret".to_string(),
+            user_repo.clone(),
+        );
+
+        let user = user_repo
+            .create(CreateUser {
+                twitch_id: "tw456".to_string(),
+                username: "user".to_string(),
+                display_name: None,
+                profile_image_url: None,
+                email: None,
+            })
+            .await?;
+
+        // Create JWT with service1
+        let jwt = auth_service1.create_jwt(&user)?;
+
+        // Try to verify with service2 (different secret)
+        let result = auth_service2.verify_jwt(&jwt);
+        assert!(result.is_err());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_or_create_user_creates_new() -> anyhow::Result<()> {
+        let pool = setup_db().await;
+        let user_repo = UserRepository::new(pool.clone());
+        let auth_service = AuthService::new(
+            "secret".to_string(),
+            "client".to_string(),
+            "secret".to_string(),
+            user_repo.clone(),
+        );
+
+        let twitch_user = TwitchUser {
+            id: "tw789".to_string(),
+            login: "newuser".to_string(),
+            display_name: "New User".to_string(),
+            profile_image_url: "http://image.url".to_string(),
+            email: Some("new@example.com".to_string()),
+        };
+
+        // User should be created
+        let user = auth_service.get_or_create_user(twitch_user.clone()).await?;
+        assert_eq!(user.twitch_id, "tw789");
+        assert_eq!(user.username, "newuser");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_or_create_user_updates_existing() -> anyhow::Result<()> {
+        let pool = setup_db().await;
+        let user_repo = UserRepository::new(pool.clone());
+        let auth_service = AuthService::new(
+            "secret".to_string(),
+            "client".to_string(),
+            "secret".to_string(),
+            user_repo.clone(),
+        );
+
+        // Create initial user
+        let initial = user_repo
+            .create(CreateUser {
+                twitch_id: "tw999".to_string(),
+                username: "oldname".to_string(),
+                display_name: Some("Old Name".to_string()),
+                profile_image_url: None,
+                email: None,
+            })
+            .await?;
+
+        // Call get_or_create with updated info
+        let twitch_user = TwitchUser {
+            id: "tw999".to_string(),
+            login: "newname".to_string(),
+            display_name: "New Name".to_string(),
+            profile_image_url: "http://new.image".to_string(),
+            email: Some("updated@example.com".to_string()),
+        };
+
+        let user = auth_service.get_or_create_user(twitch_user).await?;
+        
+        // Should have same ID but updated info
+        assert_eq!(user.id, initial.id);
+        assert_eq!(user.username, "newname");
+        assert_eq!(user.display_name.as_deref(), Some("New Name"));
+
+        Ok(())
+    }
+}

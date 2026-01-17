@@ -1,8 +1,8 @@
 use crate::models::{Claims, User};
 use crate::repositories::UserRepository;
 use axum::{
-    extract::{Query, State},
-    response::Json,
+    extract::{Query, State, Json},
+    response::Json as ResponseJson,
     routing::get,
     Extension, Router,
 };
@@ -24,6 +24,7 @@ pub struct SearchQuery {
 pub fn users_router(state: UsersRouterState) -> Router {
     Router::new()
         .route("/users/search", get(search_users))
+        .route("/users/me", get(get_current_user).patch(update_current_user))
         .with_state(state)
 }
 
@@ -31,7 +32,7 @@ async fn search_users(
     State(state): State<UsersRouterState>,
     Extension(claims): Extension<Claims>,
     Query(query): Query<SearchQuery>,
-) -> Result<Json<Vec<User>>, AppError> {
+ ) -> Result<ResponseJson<Vec<User>>, AppError> {
     let user_id = Uuid::parse_str(&claims.sub)
         .map_err(|_| AppError::BadRequest("Invalid user ID".to_string()))?;
 
@@ -43,3 +44,230 @@ async fn search_users(
 
     Ok(Json(users))
 }
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateUserRequest {
+    pub username: Option<String>,
+    pub display_name: Option<String>,
+    pub profile_image_url: Option<String>,
+    pub email: Option<String>,
+}
+
+async fn get_current_user(
+    State(state): State<UsersRouterState>,
+    Extension(claims): Extension<Claims>,
+) -> Result<ResponseJson<User>, AppError> {
+    let user_id = Uuid::parse_str(&claims.sub)
+        .map_err(|_| AppError::BadRequest("Invalid user ID".to_string()))?;
+
+    let user = state
+        .user_repo
+        .find_by_id(user_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    Ok(Json(user))
+}
+
+async fn update_current_user(
+    State(state): State<UsersRouterState>,
+    Extension(claims): Extension<Claims>,
+    Json(payload): Json<UpdateUserRequest>,
+) -> Result<ResponseJson<User>, AppError> {
+    let user_id = Uuid::parse_str(&claims.sub)
+        .map_err(|_| AppError::BadRequest("Invalid user ID".to_string()))?;
+
+    let existing = state
+        .user_repo
+        .find_by_id(user_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    let username = payload.username.as_deref().unwrap_or(&existing.username);
+    let display_name = payload.display_name.as_deref().or(existing.display_name.as_deref());
+    let profile_image_url = payload
+        .profile_image_url
+        .as_deref()
+        .or(existing.profile_image_url.as_deref());
+    let email = payload.email.clone().or(existing.email.clone());
+
+    let updated = state
+        .user_repo
+        .update_by_id(user_id, username, display_name, profile_image_url, email)
+        .await?;
+
+    Ok(Json(updated))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests_utils::setup_db;
+    use crate::models::CreateUser;
+    use axum::http::{Request, Method};
+    use axum::body::{self, Body};
+    use tower::util::ServiceExt;
+
+    fn create_claims(user: &crate::models::User) -> Claims {
+        Claims {
+            sub: user.id.to_string(),
+            twitch_id: user.twitch_id.clone(),
+            username: user.username.clone(),
+            exp: 9999999999,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_search_users() -> anyhow::Result<()> {
+        let pool = setup_db().await;
+        let user_repo = Arc::new(crate::repositories::UserRepository::new(pool.clone()));
+
+        // Create test users
+        let user1 = user_repo
+            .create(CreateUser {
+                twitch_id: "tw1".to_string(),
+                username: "alice".to_string(),
+                display_name: Some("Alice".to_string()),
+                profile_image_url: None,
+                email: None,
+            })
+            .await?;
+
+        user_repo
+            .create(CreateUser {
+                twitch_id: "tw2".to_string(),
+                username: "bob".to_string(),
+                display_name: Some("Bob".to_string()),
+                profile_image_url: None,
+                email: None,
+            })
+            .await?;
+
+        user_repo
+            .create(CreateUser {
+                twitch_id: "tw3".to_string(),
+                username: "charlie".to_string(),
+                display_name: Some("Charlie".to_string()),
+                profile_image_url: None,
+                email: None,
+            })
+            .await?;
+
+        let state = UsersRouterState { user_repo };
+        let app = users_router(state);
+        let claims = create_claims(&user1);
+
+        // Search for "bob"
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/users/search?q=bob")
+            .extension(claims.clone())
+            .body(Body::empty())?;
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let bytes = body::to_bytes(resp.into_body(), 64 * 1024).await?;
+        let results: Vec<serde_json::Value> = serde_json::from_slice(&bytes)?;
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0]["username"].as_str(), Some("bob"));
+
+        // Search with short query (less than 2 chars)
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/users/search?q=a")
+            .extension(claims)
+            .body(Body::empty())?;
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let bytes = body::to_bytes(resp.into_body(), 64 * 1024).await?;
+        let results: Vec<serde_json::Value> = serde_json::from_slice(&bytes)?;
+        assert_eq!(results.len(), 0); // Should return empty
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_current_user() -> anyhow::Result<()> {
+        let pool = setup_db().await;
+        let user_repo = Arc::new(crate::repositories::UserRepository::new(pool.clone()));
+
+        let user = user_repo
+            .create(CreateUser {
+                twitch_id: "tw1".to_string(),
+                username: "testuser".to_string(),
+                display_name: Some("Test User".to_string()),
+                profile_image_url: Some("http://image.url".to_string()),
+                email: Some("test@example.com".to_string()),
+            })
+            .await?;
+
+        let state = UsersRouterState { user_repo };
+        let app = users_router(state);
+        let claims = create_claims(&user);
+
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/users/me")
+            .extension(claims)
+            .body(Body::empty())?;
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let bytes = body::to_bytes(resp.into_body(), 64 * 1024).await?;
+        let returned_user: serde_json::Value = serde_json::from_slice(&bytes)?;
+        assert_eq!(returned_user["username"].as_str(), Some("testuser"));
+        assert_eq!(returned_user["email"].as_str(), Some("test@example.com"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_update_current_user() -> anyhow::Result<()> {
+        let pool = setup_db().await;
+        let user_repo = Arc::new(crate::repositories::UserRepository::new(pool.clone()));
+
+        let user = user_repo
+            .create(CreateUser {
+                twitch_id: "tw1".to_string(),
+                username: "oldname".to_string(),
+                display_name: Some("Old Name".to_string()),
+                profile_image_url: None,
+                email: None,
+            })
+            .await?;
+
+        let state = UsersRouterState { user_repo };
+        let app = users_router(state);
+        let claims = create_claims(&user);
+
+        // Update user
+        let update_payload = serde_json::json!({
+            "username": "newname",
+            "display_name": "New Name",
+            "email": "new@example.com"
+        });
+
+        let req = Request::builder()
+            .method(Method::PATCH)
+            .uri("/users/me")
+            .header("content-type", "application/json")
+            .extension(claims)
+            .body(Body::from(serde_json::to_vec(&update_payload)?))?;
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let bytes = body::to_bytes(resp.into_body(), 64 * 1024).await?;
+        let updated_user: serde_json::Value = serde_json::from_slice(&bytes)?;
+        assert_eq!(updated_user["username"].as_str(), Some("newname"));
+        assert_eq!(updated_user["display_name"].as_str(), Some("New Name"));
+        assert_eq!(updated_user["email"].as_str(), Some("new@example.com"));
+
+        Ok(())
+    }
+}
+

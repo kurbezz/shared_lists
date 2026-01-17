@@ -98,13 +98,13 @@ impl PageRepository {
         let mut separated = qb.separated(", ");
 
         if let Some(title) = &data.title {
-            separated.push("title = ");
-            separated.push_bind(title);
+            separated.push_unseparated("title = ");
+            separated.push_bind_unseparated(title);
         }
 
         if let Some(description) = &data.description {
-            separated.push("description = ");
-            separated.push_bind(description);
+            separated.push_unseparated("description = ");
+            separated.push_bind_unseparated(description);
         }
 
         if data.title.is_none() && data.description.is_none() {
@@ -256,3 +256,89 @@ impl PageRepository {
         Ok(false)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests_utils::setup_db;
+    use crate::models::{CreateUser, CreatePage};
+
+    #[tokio::test]
+    async fn test_page_lifecycle_and_permissions() -> anyhow::Result<()> {
+        let pool = setup_db().await;
+        let user_repo = crate::repositories::UserRepository::new(pool.clone());
+        let page_repo = PageRepository::new(pool.clone());
+
+        // Create creator and another user
+        let creator = user_repo
+            .create(CreateUser {
+                twitch_id: "c1".to_string(),
+                username: "creator".to_string(),
+                display_name: None,
+                profile_image_url: None,
+                email: None,
+            })
+            .await?;
+
+        let other = user_repo
+            .create(CreateUser {
+                twitch_id: "u2".to_string(),
+                username: "other".to_string(),
+                display_name: None,
+                profile_image_url: None,
+                email: None,
+            })
+            .await?;
+
+        // Create page
+        let page = page_repo
+            .create(
+                creator.id,
+                CreatePage {
+                    title: "Page 1".to_string(),
+                    description: Some("Desc".to_string()),
+                },
+            )
+            .await?;
+
+        assert_eq!(page.title, "Page 1");
+
+        // Set public slug
+        let page = page_repo
+            .set_public_slug(page.id, Some("slug-1".to_string()))
+            .await?;
+        assert_eq!(page.public_slug.as_deref(), Some("slug-1"));
+
+        // Grant permission
+        let perm = page_repo
+            .grant_permission(page.id, other.id, true, creator.id)
+            .await?;
+        assert_eq!(perm.user_id, other.id);
+        assert!(perm.can_edit);
+
+        // Permissions listing
+        let perms = page_repo.get_permissions(page.id).await?;
+        assert_eq!(perms.len(), 1);
+        assert_eq!(perms[0].user.id, other.id);
+
+        // Access checks
+        assert!(page_repo.check_access(page.id, creator.id).await?);
+        assert!(page_repo.check_access(page.id, other.id).await?);
+        assert!(page_repo.check_edit_permission(page.id, other.id).await?);
+
+        // Update permission
+        let updated_perm = page_repo
+            .update_permission(page.id, perm.id, false)
+            .await?
+            .expect("permission should exist");
+        assert!(!updated_perm.can_edit);
+        assert!(!page_repo.check_edit_permission(page.id, other.id).await?);
+
+        // Revoke permission
+        page_repo.revoke_permission(page.id, perm.id).await?;
+        assert!(!page_repo.check_access(page.id, other.id).await?);
+
+        Ok(())
+    }
+}
+

@@ -48,6 +48,7 @@
         "title": "My Pages",
         "welcome": "Hi, {{name}}! 👋",
         "logout": "Logout",
+        "settings": "Settings",
         "create_page": "Create Page",
         "my_pages": "My Pages ({{count}})",
         "shared_with_me": "Shared with me ({{count}})",
@@ -119,5 +120,17 @@
     "auth": {
         "callback_title": "Authorizing...",
         "callback_desc": "Please wait"
+    },
+    "profile": {
+        "title": "Profile",
+        "description": "Update your account information",
+        "settings_title": "Account settings",
+        "label_language": "Language",
+        "label_username": "Username",
+        "label_display_name": "Display name",
+        "label_email": "Email",
+        "label_profile_image": "Profile image URL",
+        "saved": "Profile saved",
+        "save_failed": "Failed to save profile"
     }
 }

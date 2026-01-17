@@ -91,6 +91,17 @@ class ApiClient {
     });
   }
 
+  async getCurrentUser(): Promise<User> {
+    return this.request<User>(`/users/me`);
+  }
+
+  async updateCurrentUser(data: any): Promise<User> {
+    return this.request<User>(`/users/me`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
   // Pages
   async getPages(): Promise<PageWithPermission[]> {
     return this.request<PageWithPermission[]>('/pages');

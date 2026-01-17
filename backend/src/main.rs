@@ -12,12 +12,12 @@ mod tests_utils;
 
 use crate::config::Config;
 use crate::middleware::{auth_middleware, AuthState};
-use crate::repositories::{ListRepository, PageRepository, UserRepository};
+use crate::repositories::{ListRepository, PageRepository, UserRepository, ApiKeyRepository};
 use crate::routes::{
-    auth_router, lists_router, pages_router, public_router, users_router, AuthRouterState,
-    ListsRouterState, PagesRouterState, PublicRouterState, UsersRouterState,
+    auth_router, lists_router, pages_router, public_router, users_router, api_keys_router, AuthRouterState,
+    ListsRouterState, PagesRouterState, PublicRouterState, UsersRouterState, ApiKeysRouterState,
 };
-use crate::services::AuthService;
+use crate::services::{AuthService, ApiKeyService};
 use axum::{middleware as axum_middleware, Router};
 use sqlx::sqlite::SqlitePoolOptions;
 use std::sync::Arc;
@@ -57,6 +57,7 @@ async fn main() -> anyhow::Result<()> {
     let user_repo = Arc::new(UserRepository::new(pool.clone()));
     let page_repo = Arc::new(PageRepository::new(pool.clone()));
     let list_repo = Arc::new(ListRepository::new(pool.clone()));
+    let api_key_repo = Arc::new(ApiKeyRepository::new(pool.clone()));
 
     // Create auth service
     let auth_service = Arc::new(AuthService::new(
@@ -65,6 +66,8 @@ async fn main() -> anyhow::Result<()> {
         config.twitch_client_secret.clone(),
         (*user_repo).clone(),
     ));
+
+    let api_key_service = Arc::new(ApiKeyService::new((*api_key_repo).clone()));
 
     // Setup CORS
     let cors = CorsLayer::new()
@@ -92,9 +95,14 @@ async fn main() -> anyhow::Result<()> {
         .merge(users_router(UsersRouterState {
             user_repo: user_repo.clone(),
         }))
+        .merge(api_keys_router(ApiKeysRouterState {
+            api_key_service: api_key_service.clone(),
+        }))
         .layer(axum_middleware::from_fn_with_state(
             AuthState {
                 auth_service: auth_service.clone(),
+                api_key_service: api_key_service.clone(),
+                user_repo: user_repo.clone(),
             },
             auth_middleware,
         ));

@@ -41,6 +41,7 @@ impl AuthService {
             twitch_id: user.twitch_id.clone(),
             username: user.username.clone(),
             exp: expiration,
+            scopes: None,
         };
 
         encode(

@@ -6,6 +6,7 @@ pub struct Claims {
     pub twitch_id: String,
     pub username: String,
     pub exp: usize,
+    pub scopes: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]

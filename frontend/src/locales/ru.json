@@ -131,6 +131,27 @@
         "label_email": "Email",
         "label_profile_image": "URL аватара",
         "saved": "Профиль сохранён",
-        "save_failed": "Не удалось сохранить профиль"
+        "save_failed": "Не удалось сохранить профиль",
+        "api_keys_title": "API-ключи",
+        "label_name": "Имя (необязательно)",
+        "label_scopes": "Разрешения (через запятую)",
+        "scopes_hint": "Введите разрешения через запятую (необязательно).",
+        "create_api_key": "Создать API-ключ",
+        "api_key_created_note": "Скопируйте этот токен сейчас — он больше не будет показан.",
+        "your_api_keys": "Ваши API-ключи",
+        "no_api_keys": "Пока нет API-ключей.",
+        "scopes_label": "Разрешения: {{scopes}}",
+        "created": "Создано: {{date}}",
+        "revoked": "Отозван",
+        "revoke": "Отозвать",
+        "revoke_confirm": "Отозвать этот API-ключ?",
+        "delete_confirm": "Удалить этот API-ключ навсегда?",
+        "created_notify": "API-ключ создан — токен показан один раз. Он был скопирован в буфер обмена.",
+        "fetch_failed": "Не удалось загрузить API-ключи",
+        "create_failed": "Не удалось создать API-ключ",
+        "revoke_failed": "Не удалось отозвать API-ключ",
+        "delete_failed": "Не удалось удалить API-ключ",
+        "revoked_success": "API-ключ отозван",
+        "delete_success": "API-ключ удалён"
     }
 }

@@ -1,5 +1,7 @@
 
-use crate::services::AuthService;
+use crate::services::{AuthService, ApiKeyService};
+use crate::repositories::UserRepository;
+use crate::models::Claims;
 use axum::{
     extract::{Request, State},
     http::StatusCode,
@@ -7,10 +9,13 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use std::sync::Arc;
+use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct AuthState {
     pub auth_service: Arc<AuthService>,
+    pub api_key_service: Arc<ApiKeyService>,
+    pub user_repo: Arc<UserRepository>,
 }
 
 pub async fn auth_middleware(
@@ -18,25 +23,66 @@ pub async fn auth_middleware(
     mut request: Request,
     next: Next,
 ) -> Result<Response, AuthError> {
-    let auth_header = request
-        .headers()
-        .get("Authorization")
-        .and_then(|h| h.to_str().ok())
-        .ok_or(AuthError::MissingToken)?;
-
-    if !auth_header.starts_with("Bearer ") {
-        return Err(AuthError::InvalidToken);
+    // Prefer explicit API key header
+    if let Some(x_key) = request.headers().get("x-api-key").and_then(|h| h.to_str().ok()) {
+        if let Ok(Some((user_id, scopes))) = state.api_key_service.verify_token(x_key).await {
+            if let Some(user) = state.user_repo.find_by_id(user_id).await.map_err(|_| AuthError::InvalidToken)? {
+                let claims = Claims {
+                    sub: user.id.to_string(),
+                    twitch_id: user.twitch_id.clone(),
+                    username: user.username.clone(),
+                    exp: usize::MAX / 2,
+                    scopes: Some(scopes),
+                };
+                request.extensions_mut().insert(claims);
+                return Ok(next.run(request).await);
+            } else {
+                return Err(AuthError::InvalidToken);
+            }
+        } else {
+            return Err(AuthError::InvalidToken);
+        }
     }
 
-    let token = &auth_header[7..];
-    let claims = state
-        .auth_service
-        .verify_jwt(token)
-        .map_err(|_| AuthError::InvalidToken)?;
+    // Check Authorization header for ApiKey or Bearer
+    if let Some(auth_header) = request.headers().get("Authorization").and_then(|h| h.to_str().ok()) {
+        if auth_header.starts_with("ApiKey ") {
+            let token = &auth_header[7..];
+            if let Ok(Some((user_id, scopes))) = state.api_key_service.verify_token(token).await {
+                if let Some(user) = state.user_repo.find_by_id(user_id).await.map_err(|_| AuthError::InvalidToken)? {
+                    let claims = Claims {
+                        sub: user.id.to_string(),
+                        twitch_id: user.twitch_id.clone(),
+                        username: user.username.clone(),
+                        exp: usize::MAX / 2,
+                        scopes: Some(scopes),
+                    };
+                    request.extensions_mut().insert(claims);
+                    return Ok(next.run(request).await);
+                } else {
+                    return Err(AuthError::InvalidToken);
+                }
+            } else {
+                return Err(AuthError::InvalidToken);
+            }
+        }
 
-    request.extensions_mut().insert(claims);
+        // Fallback to Bearer JWT
+        if auth_header.starts_with("Bearer ") {
+            let token = &auth_header[7..];
+            let mut claims = state
+                .auth_service
+                .verify_jwt(token)
+                .map_err(|_| AuthError::InvalidToken)?;
 
-    Ok(next.run(request).await)
+            claims.scopes = None;
+            request.extensions_mut().insert(claims);
+
+            return Ok(next.run(request).await);
+        }
+    }
+
+    Err(AuthError::MissingToken)
 }
 
 
@@ -88,6 +134,9 @@ mod tests {
             user_repo.clone(),
         ));
 
+        let api_key_repo = crate::repositories::ApiKeyRepository::new(pool.clone());
+        let api_key_service = Arc::new(crate::services::ApiKeyService::new(api_key_repo));
+
         // Create a user and JWT
         let user = user_repo
             .create(CreateUser {
@@ -102,7 +151,7 @@ mod tests {
         let jwt = auth_service.create_jwt(&user)?;
 
         // Create a test router with auth middleware
-        let auth_state = AuthState { auth_service };
+        let auth_state = AuthState { auth_service, api_key_service, user_repo: Arc::new(user_repo) };
         let app = Router::new()
             .route("/protected", get(test_handler))
             .layer(axum_middleware::from_fn_with_state(
@@ -130,10 +179,12 @@ mod tests {
             "test_secret".to_string(),
             "client_id".to_string(),
             "client_secret".to_string(),
-            user_repo,
+            user_repo.clone(),
         ));
 
-        let auth_state = AuthState { auth_service };
+        let api_key_repo = crate::repositories::ApiKeyRepository::new(pool.clone());
+        let api_key_service = Arc::new(crate::services::ApiKeyService::new(api_key_repo));
+        let auth_state = AuthState { auth_service, api_key_service, user_repo: Arc::new(user_repo) };
         let app = Router::new()
             .route("/protected", get(test_handler))
             .layer(axum_middleware::from_fn_with_state(
@@ -160,10 +211,12 @@ mod tests {
             "test_secret".to_string(),
             "client_id".to_string(),
             "client_secret".to_string(),
-            user_repo,
+            user_repo.clone(),
         ));
 
-        let auth_state = AuthState { auth_service };
+        let api_key_repo = crate::repositories::ApiKeyRepository::new(pool.clone());
+        let api_key_service = Arc::new(crate::services::ApiKeyService::new(api_key_repo));
+        let auth_state = AuthState { auth_service, api_key_service, user_repo: Arc::new(user_repo) };
         let app = Router::new()
             .route("/protected", get(test_handler))
             .layer(axum_middleware::from_fn_with_state(
@@ -191,10 +244,12 @@ mod tests {
             "test_secret".to_string(),
             "client_id".to_string(),
             "client_secret".to_string(),
-            user_repo,
+            user_repo.clone(),
         ));
 
-        let auth_state = AuthState { auth_service };
+        let api_key_repo = crate::repositories::ApiKeyRepository::new(pool.clone());
+        let api_key_service = Arc::new(crate::services::ApiKeyService::new(api_key_repo));
+        let auth_state = AuthState { auth_service, api_key_service, user_repo: Arc::new(user_repo) };
         let app = Router::new()
             .route("/protected", get(test_handler))
             .layer(axum_middleware::from_fn_with_state(

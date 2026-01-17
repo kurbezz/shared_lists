@@ -16,6 +16,8 @@ import type {
   UpdatePermission,
   SetPublicSlug,
   PublicPageData,
+  ApiKey,
+  CreateApiKeyResponse,
 } from '../types';
 
 // Determine API base URL from browser origin
@@ -68,15 +70,26 @@ class ApiClient {
     }
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ message: response.statusText }));
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      const errorData = await response.json().catch(() => ({} as any));
+      const msg = (errorData && (errorData.error || errorData.message)) || response.statusText || `HTTP error! status: ${response.status}`;
+      // Log full response for easier debugging
+      console.error('API error response', { url: url.toString(), status: response.status, body: errorData });
+      throw new Error(msg);
     }
 
     if (response.status === 204) {
       return undefined as T;
     }
 
-    return response.json();
+    // Some successful endpoints return 200 with an empty body — handle that gracefully
+    try {
+      const text = await response.text();
+      if (!text) return undefined as T;
+      return JSON.parse(text) as T;
+    } catch (e) {
+      // If parsing fails, return undefined instead of throwing to avoid showing spurious errors
+      return undefined as T;
+    }
   }
 
   // Auth methods
@@ -99,6 +112,30 @@ class ApiClient {
     return this.request<User>(`/users/me`, {
       method: 'PATCH',
       body: JSON.stringify(data),
+    });
+  }
+
+  // API Keys
+  async getApiKeys(): Promise<ApiKey[]> {
+    return this.request<ApiKey[]>(`/settings/api-keys`);
+  }
+
+  async createApiKey(data: { name?: string | null; scopes: string[] }): Promise<CreateApiKeyResponse> {
+    return this.request<CreateApiKeyResponse>(`/settings/api-keys`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async revokeApiKey(id: string): Promise<void> {
+    await this.request(`/settings/api-keys/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async deleteApiKey(id: string): Promise<void> {
+    await this.request(`/settings/api-keys/${id}?hard=true`, {
+      method: 'DELETE',
     });
   }
 

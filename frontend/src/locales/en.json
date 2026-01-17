@@ -131,6 +131,27 @@
         "label_email": "Email",
         "label_profile_image": "Profile image URL",
         "saved": "Profile saved",
-        "save_failed": "Failed to save profile"
+        "save_failed": "Failed to save profile",
+        "api_keys_title": "API Keys",
+        "label_name": "Name (optional)",
+        "label_scopes": "Scopes (comma separated)",
+        "scopes_hint": "Enter scopes as comma-separated values (optional).",
+        "create_api_key": "Create API Key",
+        "api_key_created_note": "Copy this token now — it won't be shown again.",
+        "your_api_keys": "Your API Keys",
+        "no_api_keys": "No API keys yet.",
+        "scopes_label": "Scopes: {{scopes}}",
+        "created": "Created: {{date}}",
+        "revoked": "Revoked",
+        "revoke": "Revoke",
+        "revoke_confirm": "Revoke this API key?",
+        "delete_confirm": "Delete this API key permanently?",
+        "created_notify": "API key created — token shown once. It was copied to your clipboard.",
+        "fetch_failed": "Failed to fetch API keys",
+        "create_failed": "Failed to create API key",
+        "revoke_failed": "Failed to revoke API key",
+        "delete_failed": "Failed to delete API key",
+        "revoked_success": "API key revoked",
+        "delete_success": "API key deleted"
     }
 }

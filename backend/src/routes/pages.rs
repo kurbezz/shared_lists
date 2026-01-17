@@ -399,6 +399,7 @@ mod tests {
                 twitch_id: user.twitch_id.clone(),
                 username: user.username.clone(),
                 exp: 9999999999,
+                scopes: None,
             })
             .body(Body::from(serde_json::to_vec(&create_payload)?))?;
 
@@ -418,6 +419,7 @@ mod tests {
                 twitch_id: user.twitch_id.clone(),
                 username: user.username.clone(),
                 exp: 9999999999,
+                scopes: None,
             })
             .body(Body::empty())?;
 
@@ -467,6 +469,7 @@ mod tests {
                 twitch_id: user.twitch_id.clone(),
                 username: user.username.clone(),
                 exp: 9999999999,
+                scopes: None,
             })
             .body(Body::from(serde_json::to_vec(&update_payload)?))?;
 
@@ -488,6 +491,7 @@ mod tests {
                 twitch_id: user.twitch_id.clone(),
                 username: user.username.clone(),
                 exp: 9999999999,
+                scopes: None,
             })
             .body(Body::empty())?;
 
@@ -528,8 +532,7 @@ mod tests {
                 sub: user.id.to_string(),
                 twitch_id: user.twitch_id.clone(),
                 username: user.username.clone(),
-                exp: 9999999999,
-            })
+                exp: 9999999999,                scopes: None,            })
             .body(Body::from(serde_json::to_vec(&slug_payload)?))?;
 
         let resp = app.clone().oneshot(req).await.unwrap();
@@ -552,8 +555,7 @@ mod tests {
                 sub: user.id.to_string(),
                 twitch_id: user.twitch_id.clone(),
                 username: user.username.clone(),
-                exp: 9999999999,
-            })
+                exp: 9999999999,                scopes: None,            })
             .body(Body::from(serde_json::to_vec(&invalid_slug)?))?;
 
         let resp = app.oneshot(req).await.unwrap();
@@ -596,6 +598,7 @@ mod tests {
                 twitch_id: owner.twitch_id.clone(),
                 username: owner.username.clone(),
                 exp: 9999999999,
+                scopes: None,
             })
             .body(Body::from(serde_json::to_vec(&grant_payload)?))?;
 
@@ -619,6 +622,7 @@ mod tests {
                 twitch_id: owner.twitch_id.clone(),
                 username: owner.username.clone(),
                 exp: 9999999999,
+                scopes: None,
             })
             .body(Body::empty())?;
 
@@ -644,6 +648,7 @@ mod tests {
                 twitch_id: owner.twitch_id.clone(),
                 username: owner.username.clone(),
                 exp: 9999999999,
+                scopes: None,
             })
             .body(Body::from(serde_json::to_vec(&update_payload)?))?;
 
@@ -660,6 +665,7 @@ mod tests {
                 twitch_id: owner.twitch_id.clone(),
                 username: owner.username.clone(),
                 exp: 9999999999,
+                scopes: None,
             })
             .body(Body::empty())?;
 

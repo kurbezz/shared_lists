@@ -114,6 +114,7 @@ mod tests {
             twitch_id: user.twitch_id.clone(),
             username: user.username.clone(),
             exp: 9999999999,
+            scopes: None,
         }
     }
 

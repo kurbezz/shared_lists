@@ -120,3 +120,21 @@ export interface PublicPageData {
   page: Page;
   lists: ListWithItems[];
 }
+
+export interface ApiKey {
+  id: string;
+  name?: string | null;
+  scopes: string[];
+  revoked: boolean;
+  created_at: string;
+}
+
+export interface CreateApiKeyRequest {
+  name?: string | null;
+  scopes: string[];
+}
+
+export interface CreateApiKeyResponse {
+  id: string;
+  token: string;
+} 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
@@ -276,12 +276,7 @@ export const PageView: React.FC = () => {
 
             {page.is_creator && (
               <div className="flex gap-2">
-                <ShareDialog
-                  page={page}
-                  onUpdate={() => {
-                    queryClient.invalidateQueries({ queryKey: ['page', pageId] });
-                  }}
-                />
+                <ShareDialog page={page} />
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="destructive" size="sm" data-cy="delete-page-btn">

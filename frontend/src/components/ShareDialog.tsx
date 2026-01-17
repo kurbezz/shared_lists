@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     Dialog,
@@ -34,12 +34,11 @@ import { cn } from '@/lib/utils';
 
 interface ShareDialogProps {
     page: Page;
-    onUpdate?: () => void;
 }
 
 type Tab = 'link' | 'collaborators';
 
-export function ShareDialog({ page, onUpdate }: ShareDialogProps) {
+export function ShareDialog({ page }: ShareDialogProps) {
     const { t } = useTranslation();
     const queryClient = useQueryClient();
     const [open, setOpen] = useState(false);
@@ -69,8 +68,6 @@ export function ShareDialog({ page, onUpdate }: ShareDialogProps) {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['page', page.id] });
             queryClient.invalidateQueries({ queryKey: ['pages'] });
-            onUpdate?.();
-            if (slug === null) setSlug('');
         },
         onError: (err) => {
             const errorMessage = err instanceof Error ? err.message : t('share.save_failed');
@@ -113,7 +110,13 @@ export function ShareDialog({ page, onUpdate }: ShareDialogProps) {
             setSearchQuery('');
             setSearchResults([]);
         }
-    }, [open, page.public_slug]);
+    }, [open]);
+
+    // Memoize existing user IDs to avoid re-running the effect
+    const existingUserIds = useMemo(
+        () => new Set(permissions.map(p => p.user_id)),
+        [permissions.length, permissions.map(p => p.user_id).join(',')]
+    );
 
     // Handle Search with debounce
     useEffect(() => {
@@ -127,7 +130,7 @@ export function ShareDialog({ page, onUpdate }: ShareDialogProps) {
             try {
                 const users = await apiClient.searchUsers(searchQuery);
                 // Filter out existing collaborators
-                const filtered = users.filter(u => !permissions.some(p => p.user_id === u.id));
+                const filtered = users.filter(u => !existingUserIds.has(u.id));
                 setSearchResults(filtered);
             } catch (err) {
                 console.error('Search failed', err);
@@ -137,7 +140,7 @@ export function ShareDialog({ page, onUpdate }: ShareDialogProps) {
         }, 300);
 
         return () => clearTimeout(timer);
-    }, [searchQuery, permissions]);
+    }, [searchQuery, existingUserIds]);
 
     const publicUrl = page.public_slug
         ? `${window.location.origin}/p/${page.public_slug}`

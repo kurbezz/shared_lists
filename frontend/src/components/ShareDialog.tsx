@@ -45,7 +45,7 @@ export function ShareDialog({ page }: ShareDialogProps) {
     const [activeTab, setActiveTab] = useState<Tab>('link');
 
     // Link States
-    const [slug, setSlug] = useState(page.public_slug || '');
+    const [slug, setSlug] = useState(page.public_slug ? page.public_slug.slice(0, 50) : '');
     const [linkError, setLinkError] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
 
@@ -104,7 +104,7 @@ export function ShareDialog({ page }: ShareDialogProps) {
 
     useEffect(() => {
         if (open) {
-            setSlug(page.public_slug || '');
+            setSlug((page.public_slug || '').slice(0, 50));
             setLinkError(null);
             setPermError(null);
             setSearchQuery('');
@@ -208,7 +208,7 @@ export function ShareDialog({ page }: ShareDialogProps) {
                     <span className="hidden sm:inline">{t('share.button')}</span>
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md bg-background/95 backdrop-blur-md border-primary/10">
+            <DialogContent className="max-w-[90vw] sm:max-w-md w-full overflow-hidden bg-background/95 backdrop-blur-md border-primary/10">
                 <DialogHeader>
                     <DialogTitle>{t('share.title')}</DialogTitle>
                     <DialogDescription>
@@ -242,25 +242,26 @@ export function ShareDialog({ page }: ShareDialogProps) {
                     </button>
                 </div>
 
-                <div className="space-y-4 min-h-[300px]">
+                <div className="space-y-4 min-h-[300px] w-full overflow-hidden">
                     {activeTab === 'link' ? (
                         <div className="space-y-4 animate-in fade-in slide-in-from-left-2 duration-200">
                             <div className="space-y-2">
                                 <Label htmlFor="slug" className="text-xs uppercase tracking-wider text-muted-foreground">
                                     {t('share.slug')}
                                 </Label>
-                                <div className="flex gap-2">
+                                <div className="flex gap-2 min-w-0">
                                     <Input
                                         id="slug"
                                         placeholder="my-cool-list"
                                         value={slug}
                                         autoFocus
+                                        maxLength={50}
                                         onChange={(e) => {
                                             setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''));
                                             setLinkError(null);
                                         }}
                                         disabled={setPublicSlugMutation.isPending}
-                                        className="bg-muted/30 border-muted-foreground/20 focus-visible:ring-primary/20"
+                                        className="min-w-0 bg-muted/30 border-muted-foreground/20 focus-visible:ring-primary/20"
                                         data-cy="share-slug-input"
                                     />
                                     <Button
@@ -282,10 +283,10 @@ export function ShareDialog({ page }: ShareDialogProps) {
                             )}
 
                             {publicUrl && (
-                                <div className="space-y-2 pt-2 border-t border-primary/5">
+                                <div className="space-y-2 pt-2 border-t border-primary/5 w-full overflow-hidden">
                                     <Label className="text-xs uppercase tracking-wider text-muted-foreground">{t('share.current_link')}</Label>
-                                    <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-lg border border-primary/10">
-                                        <code className="flex-1 text-xs truncate font-mono text-primary/80">{publicUrl}</code>
+                                    <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-lg border border-primary/10 min-w-0 w-full overflow-hidden">
+                                        <code className="block w-full min-w-0 text-xs truncate font-mono text-primary/80">{publicUrl}</code>
                                         <div className="flex gap-1">
                                             <Button variant="ghost" size="icon" onClick={handleCopy} className="h-8 w-8 hover:bg-primary/10 hover:text-primary">
                                                 {copied ? (

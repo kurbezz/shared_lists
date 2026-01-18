@@ -8,6 +8,7 @@ pub struct ApiKey {
     pub id: String,
     pub user_id: Uuid,
     pub name: Option<String>,
+    #[allow(dead_code)]
     #[serde(skip)]
     pub token_hash: String,
     pub scopes: String,

@@ -73,6 +73,7 @@ impl ApiKeyService {
         self.repo.delete(id, user_id).await
     }
 
+    #[allow(dead_code)]
     pub async fn get_api_key(&self, id: &str, user_id: Uuid) -> Result<Option<ApiKey>> {
         self.repo.find_by_id(id, user_id).await
     }

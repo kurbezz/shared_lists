@@ -105,6 +105,7 @@ impl ApiKeyRepository {
         Ok(result.rows_affected() > 0)
     }
 
+    #[allow(dead_code)]
     pub async fn find_by_id(&self, id: &str, user_id: Uuid) -> Result<Option<ApiKey>> {
         let api_key = sqlx::query_as::<_, ApiKey>(
             r#"SELECT id, user_id, name, token_hash, scopes, 

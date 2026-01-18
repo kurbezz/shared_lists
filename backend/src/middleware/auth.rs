@@ -9,7 +9,6 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use std::sync::Arc;
-use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct AuthState {

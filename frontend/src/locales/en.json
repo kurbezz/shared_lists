@@ -104,7 +104,10 @@
         "go_home": "Go Home",
         "no_lists": "No lists yet",
         "items_count": "{{count}} items",
-        "no_items": "No items"
+        "no_items": "No items",
+        "completed": "Completed",
+        "lists_count": "Lists",
+        "total_items": "Items"
     },
     "list": {
         "create_error": "Failed to create item",

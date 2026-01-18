@@ -166,8 +166,18 @@ export const ListComponent: React.FC<ListComponentProps> = ({
       touchAction: 'manipulation',
     } as React.CSSProperties;
 
+    // Ignore pointerdown on interactive elements so inputs/buttons inside the item can be used without starting a drag
+    const filteredListeners = {
+      ...listeners,
+      onPointerDown: (e: React.PointerEvent) => {
+        const target = e.target as HTMLElement | null;
+        if (target && target.closest && target.closest('input, textarea, button, a, select, [contenteditable="true"]')) return;
+        (listeners as unknown as { onPointerDown?: (e: React.PointerEvent) => void }).onPointerDown?.(e);
+      },
+    } as typeof listeners;
+
     return (
-      <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
+      <div ref={setNodeRef} style={style} {...attributes} {...filteredListeners} className="cursor-grab active:cursor-grabbing">
         <ListItemComponent
           key={item.id}
           item={item}
@@ -196,7 +206,7 @@ export const ListComponent: React.FC<ListComponentProps> = ({
   };
 
   return (
-    <Card className="w-[300px] flex-shrink-0 flex flex-col max-h-full shadow-md border-t-4 border-t-primary">
+    <Card className="w-full lg:w-[300px] lg:flex-shrink-0 mx-auto flex flex-col max-h-full min-h-[180px] shadow-md border-t-4 border-t-primary rounded-md md:rounded-lg">
       {/* List Header */}
       <CardHeader className="p-3 pb-2 space-y-0 relative group">
         {isEditing ? (
@@ -227,7 +237,7 @@ export const ListComponent: React.FC<ListComponentProps> = ({
               {list.title}
             </h3>
             {canEdit && (
-              <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity absolute right-2 top-3 bg-card shadow-sm border rounded p-0.5">
+              <div className="flex gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity md:absolute md:right-2 md:top-3 bg-card shadow-sm border rounded p-0.5">
                 <Button
                   size="icon"
                   variant="ghost"

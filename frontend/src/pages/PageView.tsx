@@ -16,7 +16,7 @@ import type { DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useTranslation } from 'react-i18next';
-import type { List } from '../types';
+import type { List, PageWithPermission } from '../types';
 import UserMenu from '../components/UserMenu';
 import { useToast } from '@/components/ui/useToast';
 
@@ -61,6 +61,20 @@ export const PageView: React.FC = () => {
       navigate('/');
     }
   }, [pageError, navigate, t, notify]);
+
+  // Watch global pages list — if the current page was deleted elsewhere, redirect to home
+  // Guard with `isFetched` to avoid running during refetch cycles and causing repeated navigations
+  const { data: pages = [], isFetched: pagesFetched } = useQuery<PageWithPermission[]>({
+    queryKey: ['pages'],
+    queryFn: () => apiClient.getPages(),
+  });
+
+  useEffect(() => {
+    if (!pagesFetched) return; // don't act while pages are loading/refetching
+    if (pageId && pages && !pages.find((p) => p.id === pageId)) {
+      navigate('/');
+    }
+  }, [pagesFetched, pages, pageId, navigate]);
 
   // Mutations
   const addListMutation = useMutation({
@@ -116,8 +130,8 @@ export const PageView: React.FC = () => {
   const deletePageMutation = useMutation({
     mutationFn: () => apiClient.deletePage(pageId!),
     onSuccess: () => {
+      // Invalidate list of pages; the pages watcher will redirect if the current page is gone.
       queryClient.invalidateQueries({ queryKey: ['pages'] });
-      navigate('/');
     },
     onError: (error) => {
       console.error('Failed to delete page:', error);
@@ -201,8 +215,19 @@ export const PageView: React.FC = () => {
       touchAction: 'manipulation',
     } as React.CSSProperties;
 
+    // Ignore pointerdown on interactive elements to allow focusing inputs, clicking buttons, etc.
+    const filteredListeners = {
+      ...listeners,
+      onPointerDown: (e: React.PointerEvent) => {
+        const target = e.target as HTMLElement | null;
+        if (target && target.closest && target.closest('input, textarea, button, a, select, [contenteditable="true"]')) return;
+        // Call original handler if present
+        (listeners as unknown as { onPointerDown?: (e: React.PointerEvent) => void }).onPointerDown?.(e);
+      },
+    } as typeof listeners;
+
     return (
-      <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
+      <div ref={setNodeRef} style={style} {...attributes} {...filteredListeners} className="cursor-grab active:cursor-grabbing">
         <ListComponent
           list={list}
           canEdit={page!.can_edit}
@@ -233,6 +258,19 @@ export const PageView: React.FC = () => {
   const handleDeletePage = async () => {
     if (!pageId) return;
     deletePageMutation.mutate();
+  };
+
+  // Navigate back in history if possible; fallback to home
+  const handleBack = () => {
+    try {
+      if (window.history.length > 1) {
+        navigate(-1);
+      } else {
+        navigate('/');
+      }
+    } catch {
+      navigate('/');
+    }
   };
 
   const handleKeyDownNewList = (e: React.KeyboardEvent) => {
@@ -276,16 +314,16 @@ export const PageView: React.FC = () => {
     <div className="h-screen bg-background text-foreground flex flex-col">
       {/* Header */}
       <div className="border-b bg-card shadow-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 space-y-1">
               <div className="flex items-center gap-3">
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => navigate('/')}
+                  onClick={handleBack}
                   title={t('page.back_to_pages')}
-                  className="mr-1"
+                  className="mr-1 p-2"
                   data-cy="back-to-dashboard-btn"
                 >
                   <ChevronLeft className="w-5 h-5" />
@@ -299,7 +337,7 @@ export const PageView: React.FC = () => {
                       onKeyDown={handleKeyDownTitle}
                       onBlur={handleUpdatePageTitle} // Keep blur for now
                       autoFocus
-                      className="text-2xl font-bold h-10"
+                      className="text-xl md:text-2xl font-bold h-10"
                     />
                     <Button size="icon" variant="ghost" className="h-9 w-9" onClick={handleUpdatePageTitle} onMouseDown={(e) => e.preventDefault()}>
                       <Check className="h-4 w-4" />
@@ -317,7 +355,7 @@ export const PageView: React.FC = () => {
                 )}
               </div>
 
-              <div className="pl-12">
+              <div className="pl-0 md:pl-12">
                 {isEditingDesc ? (
                   <div className="flex items-start gap-2 max-w-lg">
                     <Textarea
@@ -362,9 +400,9 @@ export const PageView: React.FC = () => {
                   <ShareDialog page={page} />
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="sm" data-cy="delete-page-btn">
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        {t('page.delete_page')}
+                      <Button variant="destructive" size="sm" className="gap-2" data-cy="delete-page-btn">
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        <span className="hidden sm:inline">{t('page.delete_page')}</span>
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
@@ -396,12 +434,12 @@ export const PageView: React.FC = () => {
       </div>
 
       {/* Lists */}
-      <div className="flex-1 overflow-hidden">
-        {/* Horizontal Scroll Area */}
-        <div className="h-full overflow-x-auto p-6">
+      <div className="flex-1 overflow-hidden min-h-0">
+        {/* Scroll area: vertical on small screens, horizontal on md+ */}
+        <div className="h-full overflow-y-auto p-4 md:overflow-x-auto md:p-6">
           <DndContext onDragEnd={handleListsDragEnd} collisionDetection={closestCenter}>
             <SortableContext items={lists.map(l => l.id)} strategy={rectSortingStrategy}>
-              <div className="flex gap-6 h-full items-start min-w-min">
+              <div className="grid grid-cols-1 md:grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-4 md:gap-6 items-start lg:flex lg:flex-row lg:items-start lg:gap-6 lg:overflow-x-auto lg:py-2">
                 {isListsLoading ? (
                   <div className="flex gap-4">
                     {[1, 2, 3].map(i => (
@@ -416,7 +454,7 @@ export const PageView: React.FC = () => {
 
                 {/* Add List */}
                 {page.can_edit && (
-                  <Card className="w-[300px] flex-shrink-0 bg-muted/30 border-dashed border-2 shadow-none hover:bg-muted/50 transition-colors">
+                  <Card className="w-full lg:w-[300px] lg:flex-shrink-0 bg-muted/30 border-dashed border-2 shadow-none hover:bg-muted/50 transition-colors">
                     <CardContent className="p-4 pt-4">
                       <h3 className="font-semibold text-lg mb-3">{t('page.new_list')}</h3>
                       <div className="flex gap-2">

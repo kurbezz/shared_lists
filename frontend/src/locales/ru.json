@@ -104,7 +104,10 @@
         "go_home": "На главную",
         "no_lists": "Списков пока нет",
         "items_count": "{{count}} эл.",
-        "no_items": "Нет элементов"
+        "no_items": "Нет элементов",
+        "completed": "Выполнено",
+        "lists_count": "Списки",
+        "total_items": "Элементы"
     },
     "list": {
         "create_error": "Не удалось создать элемент",

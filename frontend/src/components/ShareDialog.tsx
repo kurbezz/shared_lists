@@ -112,32 +112,44 @@ export function ShareDialog({ page }: ShareDialogProps) {
         }
     }, [open, page.public_slug]);
 
-    // Memoize existing user IDs to avoid re-running the effect
-    const existingUserIds = useMemo(() => new Set(permissions.map(p => p.user_id)), [permissions]);
+    // Memoize a stable key to avoid re-runs caused by reference changes
+    const existingUserIdsKey = useMemo(() => permissions.map(p => p.user_id).sort().join(','), [permissions]);
 
-    // Handle Search with debounce
+    // Handle Search with debounce and cancellation; only active when dialog open and on collaborators tab
     useEffect(() => {
+        if (!open || activeTab !== 'collaborators') {
+            setSearchResults([]);
+            return;
+        }
+
         if (searchQuery.length < 2) {
             setSearchResults([]);
             return;
         }
 
+        let mounted = true;
+        const exclude = new Set(existingUserIdsKey ? existingUserIdsKey.split(',') : []);
+
         const timer = setTimeout(async () => {
             setIsSearching(true);
             try {
                 const users = await apiClient.searchUsers(searchQuery);
+                if (!mounted) return;
                 // Filter out existing collaborators
-                const filtered = users.filter(u => !existingUserIds.has(u.id));
+                const filtered = users.filter(u => !exclude.has(u.id));
                 setSearchResults(filtered);
             } catch (err) {
                 console.error('Search failed', err);
             } finally {
-                setIsSearching(false);
+                if (mounted) setIsSearching(false);
             }
         }, 300);
 
-        return () => clearTimeout(timer);
-    }, [searchQuery, existingUserIds]);
+        return () => {
+            mounted = false;
+            clearTimeout(timer);
+        };
+    }, [searchQuery, existingUserIdsKey, open, activeTab]);
 
     const publicUrl = page.public_slug
         ? `${window.location.origin}/p/${page.public_slug}`
@@ -191,9 +203,9 @@ export function ShareDialog({ page }: ShareDialogProps) {
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="bg-background/50 backdrop-blur-sm border-primary/20 hover:border-primary/50 transition-all" data-cy="share-btn">
-                    <Share2 className="h-4 w-4 mr-2 text-primary" />
-                    {t('share.button')}
+                <Button variant="outline" size="sm" className="bg-background/50 backdrop-blur-sm border-primary/20 hover:border-primary/50 transition-all gap-2" data-cy="share-btn">
+                    <Share2 className="h-4 w-4 text-primary" />
+                    <span className="hidden sm:inline">{t('share.button')}</span>
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-md bg-background/95 backdrop-blur-md border-primary/10">

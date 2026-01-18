@@ -7,8 +7,10 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY migrations ./migrations
+COPY .sqlx ./.sqlx
 
 # Build the application
+ENV SQLX_OFFLINE=true
 RUN cargo build --release
 
 # Runtime stage

@@ -24,16 +24,16 @@ impl ApiKeyRepository {
         let id = Uuid::new_v4().to_string();
         let now = Utc::now();
 
-        sqlx::query(
+        sqlx::query!(
             r#"INSERT INTO api_keys (id, user_id, name, token_hash, scopes, revoked, created_at)
-               VALUES (?, ?, ?, ?, ?, 0, ?)"#
+               VALUES (?, ?, ?, ?, ?, 0, ?)"#,
+            id,
+            user_id,
+            name,
+            token_hash,
+            scopes,
+            now
         )
-        .bind(&id)
-        .bind(user_id)
-        .bind(name)
-        .bind(token_hash)
-        .bind(scopes)
-        .bind(now)
         .execute(&self.pool)
         .await
         .context("Failed to insert API key")?;
@@ -80,11 +80,11 @@ impl ApiKeyRepository {
     }
 
     pub async fn revoke(&self, id: &str, user_id: Uuid) -> Result<bool> {
-        let result = sqlx::query(
-            r#"UPDATE api_keys SET revoked = 1 WHERE id = ? AND user_id = ? AND revoked = 0"#
+        let result = sqlx::query!(
+            r#"UPDATE api_keys SET revoked = 1 WHERE id = ? AND user_id = ? AND revoked = 0"#,
+            id,
+            user_id
         )
-        .bind(id)
-        .bind(user_id)
         .execute(&self.pool)
         .await
         .context("Failed to revoke API key")?;
@@ -93,11 +93,11 @@ impl ApiKeyRepository {
     }
 
     pub async fn delete(&self, id: &str, user_id: Uuid) -> Result<bool> {
-        let result = sqlx::query(
-            r#"DELETE FROM api_keys WHERE id = ? AND user_id = ?"#
+        let result = sqlx::query!(
+            r#"DELETE FROM api_keys WHERE id = ? AND user_id = ?"#,
+            id,
+            user_id
         )
-        .bind(id)
-        .bind(user_id)
         .execute(&self.pool)
         .await
         .context("Failed to delete API key")?;

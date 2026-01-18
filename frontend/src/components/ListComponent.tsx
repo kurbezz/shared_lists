@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { List, UpdateListItem } from '../types';
+import type { List, UpdateListItem, ListItem } from '../types';
 import { apiClient } from '../api/client';
 import { ListItemComponent } from './ListItemComponent';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
@@ -10,6 +10,10 @@ import { Plus, Pencil, Trash2, Check, X, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/components/ui/toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { DndContext, closestCenter } from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface ListComponentProps {
   list: List;
@@ -103,6 +107,78 @@ export const ListComponent: React.FC<ListComponentProps> = ({
     setIsDeleteOpen(true);
   };
 
+  // Reorder items within the list (drag & drop) — batched optimistic update
+  const updateItemsPositionsMutation = useMutation({
+    mutationFn: (updates: { itemId: string; position: number }[]) =>
+      Promise.all(updates.map(u => apiClient.updateListItem(list.id, u.itemId, { position: u.position }))),
+    onMutate: async (updates) => {
+      await queryClient.cancelQueries({ queryKey: ['list-items', list.id] });
+      const previous = queryClient.getQueryData(['list-items', list.id]);
+
+      queryClient.setQueryData(['list-items', list.id], (old: any) => {
+        if (!old) return old;
+        const mutated = old.map((it: any) => ({ ...it }));
+        updates.forEach(u => {
+          const idx = mutated.findIndex((x: any) => x.id === u.itemId);
+          if (idx !== -1) mutated[idx] = { ...mutated[idx], position: u.position };
+        });
+        return mutated.slice().sort((a: any, b: any) => a.position - b.position);
+      });
+
+      return { previous };
+    },
+    onError: (err, _vars, context: any) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['list-items', list.id], context.previous);
+      }
+      console.error('Failed to update item positions:', err);
+      notify(t('list.update_error'));
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['list-items', list.id] }),
+  });
+
+  const handleItemsDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = items.findIndex(i => i.id === active.id);
+    const newIndex = items.findIndex(i => i.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const newOrder = arrayMove(items, oldIndex, newIndex).map((it, idx) => ({ ...it, position: idx }));
+
+    // Compute only changed positions
+    const changed = newOrder
+      .map((it, idx) => ({ itemId: it.id, position: idx, prev: items.find(x => x.id === it.id)?.position }))
+      .filter(x => x.prev !== x.position)
+      .map(x => ({ itemId: x.itemId, position: x.position }));
+
+    if (changed.length === 0) return;
+
+    // Trigger batched optimistic mutation
+    updateItemsPositionsMutation.mutate(changed);
+  };
+
+  const SortableItem: React.FC<{ item: ListItem }> = ({ item }) => {
+    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id });
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      touchAction: 'manipulation',
+    } as React.CSSProperties;
+
+    return (
+      <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
+        <ListItemComponent
+          key={item.id}
+          item={item}
+          canEdit={canEdit}
+          onUpdate={handleUpdateItem}
+          onDelete={handleDeleteItem}
+        />
+      </div>
+    );
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -189,15 +265,15 @@ export const ListComponent: React.FC<ListComponentProps> = ({
             {t('list.empty')}
           </div>
         ) : (
-          items.map((item) => (
-            <ListItemComponent
-              key={item.id}
-              item={item}
-              canEdit={canEdit}
-              onUpdate={handleUpdateItem}
-              onDelete={handleDeleteItem}
-            />
-          ))
+          <DndContext onDragEnd={(e) => handleItemsDragEnd(e)} collisionDetection={closestCenter}>
+            <SortableContext items={items.map(i => i.id)} strategy={rectSortingStrategy}>
+              <div className="space-y-1">
+                {items.map((item) => (
+                  <SortableItem key={item.id} item={item} />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         )}
       </CardContent>
 

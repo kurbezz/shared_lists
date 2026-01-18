@@ -11,7 +11,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, Trash2, Plus, Loader2, Check } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { DndContext, closestCenter } from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useTranslation } from 'react-i18next';
+import type { List } from '../types';
 import UserMenu from '../components/UserMenu';
 import { useToast } from '@/components/ui/toast';
 
@@ -134,6 +139,80 @@ export const PageView: React.FC = () => {
     if (!pageId) return;
     deleteListMutation.mutate(listId);
   };
+
+  // Reordering lists (drag & drop) — batched optimistic update using TanStack Query
+  const updateListPositionsMutation = useMutation({
+    mutationFn: (updates: { listId: string; position: number }[]) =>
+      Promise.all(updates.map(u => apiClient.updateList(pageId!, u.listId, { position: u.position }))),
+    onMutate: async (updates) => {
+      await queryClient.cancelQueries({ queryKey: ['lists', pageId] });
+      const previous = queryClient.getQueryData<List[]>(['lists', pageId]);
+
+      queryClient.setQueryData(['lists', pageId], (old?: List[]) => {
+        if (!old) return old;
+        const mutated = old.map(l => ({ ...l }));
+        updates.forEach(u => {
+          const idx = mutated.findIndex(x => x.id === u.listId);
+          if (idx !== -1) mutated[idx] = { ...mutated[idx], position: u.position };
+        });
+        return mutated.slice().sort((a, b) => a.position - b.position);
+      });
+
+      return { previous };
+    },
+    onError: (err, _vars, context: any) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['lists', pageId], context.previous);
+      }
+      console.error('Failed to update list positions:', err);
+      notify(t('page.update_list_error'));
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['lists', pageId] }),
+  });
+
+  const handleListsDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = lists.findIndex(l => l.id === active.id);
+    const newIndex = lists.findIndex(l => l.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const newOrder = arrayMove(lists, oldIndex, newIndex).map((l, idx) => ({ ...l, position: idx }));
+
+    // Compute only changed positions
+    const changed = newOrder
+      .map((l, idx) => ({ listId: l.id, position: idx, prev: lists.find(x => x.id === l.id)?.position }))
+      .filter(x => x.prev !== x.position)
+      .map(x => ({ listId: x.listId, position: x.position }));
+
+    if (changed.length === 0) return;
+
+    // Trigger batched optimistic mutation
+    updateListPositionsMutation.mutate(changed);
+  };
+
+  // Sortable wrapper for lists
+  const SortableListItem: React.FC<{list: List}> = ({ list }) => {
+    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: list.id });
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      touchAction: 'manipulation',
+    } as React.CSSProperties;
+
+    return (
+      <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
+        <ListComponent
+          list={list}
+          canEdit={page!.can_edit}
+          onUpdate={handleUpdateList}
+          onDelete={handleDeleteList}
+        />
+      </div>
+    );
+  };
+
 
   const handleUpdatePageTitle = async () => {
     if (!pageId || !editPageTitle.trim() || editPageTitle === page?.title) {
@@ -320,54 +399,52 @@ export const PageView: React.FC = () => {
       <div className="flex-1 overflow-hidden">
         {/* Horizontal Scroll Area */}
         <div className="h-full overflow-x-auto p-6">
-          <div className="flex gap-6 h-full items-start min-w-min">
-            {isListsLoading ? (
-              <div className="flex gap-4">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="w-[300px] h-[200px] bg-muted/50 rounded-xl animate-pulse" />
-                ))}
-              </div>
-            ) : (
-              lists.map((list) => (
-                <ListComponent
-                  key={list.id}
-                  list={list}
-                  canEdit={page.can_edit}
-                  onUpdate={handleUpdateList}
-                  onDelete={handleDeleteList}
-                />
-              ))
-            )}
-
-            {/* Add List */}
-            {page.can_edit && (
-              <Card className="w-[300px] flex-shrink-0 bg-muted/30 border-dashed border-2 shadow-none hover:bg-muted/50 transition-colors">
-                <CardContent className="p-4 pt-4">
-                  <h3 className="font-semibold text-lg mb-3">{t('page.new_list')}</h3>
-                  <div className="flex gap-2">
-                    <Input
-                      value={newListTitle}
-                      onChange={(e) => setNewListTitle(e.target.value)}
-                      onKeyDown={handleKeyDownNewList}
-                      placeholder={t('page.new_list_placeholder')}
-                      disabled={addListMutation.isPending}
-                      className="bg-background"
-                      data-cy="create-list-input"
-                    />
-                    <Button
-                      size="icon"
-                      onClick={handleAddList}
-                      disabled={addListMutation.isPending || !newListTitle.trim()}
-                      className="flex-shrink-0"
-                      data-cy="create-list-btn"
-                    >
-                      {addListMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                    </Button>
+          <DndContext onDragEnd={handleListsDragEnd} collisionDetection={closestCenter}>
+            <SortableContext items={lists.map(l => l.id)} strategy={rectSortingStrategy}>
+              <div className="flex gap-6 h-full items-start min-w-min">
+                {isListsLoading ? (
+                  <div className="flex gap-4">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="w-[300px] h-[200px] bg-muted/50 rounded-xl animate-pulse" />
+                    ))}
                   </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+                ) : (
+                  lists.map((list) => (
+                    <SortableListItem key={list.id} list={list} />
+                  ))
+                )}
+
+                {/* Add List */}
+                {page.can_edit && (
+                  <Card className="w-[300px] flex-shrink-0 bg-muted/30 border-dashed border-2 shadow-none hover:bg-muted/50 transition-colors">
+                    <CardContent className="p-4 pt-4">
+                      <h3 className="font-semibold text-lg mb-3">{t('page.new_list')}</h3>
+                      <div className="flex gap-2">
+                        <Input
+                          value={newListTitle}
+                          onChange={(e) => setNewListTitle(e.target.value)}
+                          onKeyDown={handleKeyDownNewList}
+                          placeholder={t('page.new_list_placeholder')}
+                          disabled={addListMutation.isPending}
+                          className="bg-background"
+                          data-cy="create-list-input"
+                        />
+                        <Button
+                          size="icon"
+                          onClick={handleAddList}
+                          disabled={addListMutation.isPending || !newListTitle.trim()}
+                          className="flex-shrink-0"
+                          data-cy="create-list-btn"
+                        >
+                          {addListMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </SortableContext>
+          </DndContext>
         </div>
       </div>
     </div>

@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "🔎 Running pre-commit warning checks..."
+
+# Run Rust checks with warnings denied
+echo "
+--- Rust: checking (warnings are treated as errors) ---"
+export RUSTFLAGS="-D warnings"
+if ! cargo check --manifest-path backend/Cargo.toml --workspace --all-targets; then
+  echo "\n❌ Rust reported warnings/errors. Fix them before committing."
+  exit 1
+fi
+
+# Run Clippy if available (optional but recommended)
+if command -v cargo >/dev/null 2>&1; then
+  if cargo clippy --version >/dev/null 2>&1; then
+    echo "
+--- Rust: clippy (denying warnings) ---"
+    if ! cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings; then
+      echo "\n❌ clippy found warnings/errors. Fix them before committing."
+      exit 1
+    fi
+  fi
+fi
+
+# Frontend lint: fail on warnings
+if [ -d "frontend" ]; then
+  echo "
+--- Frontend: eslint (no warnings allowed) ---"
+  if ! npm --prefix frontend run lint --silent -- --max-warnings=0; then
+    echo "\n❌ ESLint reported warnings/errors in frontend. Fix them before committing."
+    exit 1
+  fi
+fi
+
+# All checks passed
+echo "\n✅ No warnings detected. Proceeding with commit."
+exit 0

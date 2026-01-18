@@ -24,23 +24,23 @@ impl ApiKeyRepository {
         let id = Uuid::new_v4().to_string();
         let now = Utc::now();
 
-        sqlx::query!(
-            r#"INSERT INTO api_keys (id, user_id, name, token_hash, scopes, revoked, created_at) 
-               VALUES (?, ?, ?, ?, ?, 0, ?)"#,
-            id,
-            user_id,
-            name,
-            token_hash,
-            scopes,
-            now
+        sqlx::query(
+            r#"INSERT INTO api_keys (id, user_id, name, token_hash, scopes, revoked, created_at)
+               VALUES (?, ?, ?, ?, ?, 0, ?)"#
         )
+        .bind(&id)
+        .bind(user_id)
+        .bind(name)
+        .bind(token_hash)
+        .bind(scopes)
+        .bind(now)
         .execute(&self.pool)
         .await
         .context("Failed to insert API key")?;
 
         let api_key = sqlx::query_as::<_, ApiKey>(
-            r#"SELECT id, user_id, name, token_hash, scopes, 
-                      revoked, created_at 
+            r#"SELECT id, user_id, name, token_hash, scopes,
+                      revoked, created_at
                FROM api_keys WHERE id = ?"#,
         )
         .bind(&id)
@@ -53,8 +53,8 @@ impl ApiKeyRepository {
 
     pub async fn find_by_token_hash(&self, token_hash: &str) -> Result<Option<ApiKey>> {
         let api_key = sqlx::query_as::<_, ApiKey>(
-            r#"SELECT id, user_id, name, token_hash, scopes, 
-                      revoked, created_at 
+            r#"SELECT id, user_id, name, token_hash, scopes,
+                      revoked, created_at
                FROM api_keys WHERE token_hash = ? AND revoked = 0"#,
         )
         .bind(token_hash)
@@ -67,8 +67,8 @@ impl ApiKeyRepository {
 
     pub async fn list_by_user(&self, user_id: Uuid) -> Result<Vec<ApiKey>> {
         let api_keys = sqlx::query_as::<_, ApiKey>(
-            r#"SELECT id, user_id, name, token_hash, scopes, 
-                      revoked, created_at 
+            r#"SELECT id, user_id, name, token_hash, scopes,
+                      revoked, created_at
                FROM api_keys WHERE user_id = ? ORDER BY created_at DESC"#,
         )
         .bind(user_id)
@@ -80,11 +80,11 @@ impl ApiKeyRepository {
     }
 
     pub async fn revoke(&self, id: &str, user_id: Uuid) -> Result<bool> {
-        let result = sqlx::query!(
-            r#"UPDATE api_keys SET revoked = 1 WHERE id = ? AND user_id = ? AND revoked = 0"#,
-            id,
-            user_id
+        let result = sqlx::query(
+            r#"UPDATE api_keys SET revoked = 1 WHERE id = ? AND user_id = ? AND revoked = 0"#
         )
+        .bind(id)
+        .bind(user_id)
         .execute(&self.pool)
         .await
         .context("Failed to revoke API key")?;
@@ -93,11 +93,11 @@ impl ApiKeyRepository {
     }
 
     pub async fn delete(&self, id: &str, user_id: Uuid) -> Result<bool> {
-        let result = sqlx::query!(
-            r#"DELETE FROM api_keys WHERE id = ? AND user_id = ?"#,
-            id,
-            user_id
+        let result = sqlx::query(
+            r#"DELETE FROM api_keys WHERE id = ? AND user_id = ?"#
         )
+        .bind(id)
+        .bind(user_id)
         .execute(&self.pool)
         .await
         .context("Failed to delete API key")?;
@@ -108,8 +108,8 @@ impl ApiKeyRepository {
     #[allow(dead_code)]
     pub async fn find_by_id(&self, id: &str, user_id: Uuid) -> Result<Option<ApiKey>> {
         let api_key = sqlx::query_as::<_, ApiKey>(
-            r#"SELECT id, user_id, name, token_hash, scopes, 
-                      revoked, created_at 
+            r#"SELECT id, user_id, name, token_hash, scopes,
+                      revoked, created_at
                FROM api_keys WHERE id = ? AND user_id = ?"#,
         )
         .bind(id)

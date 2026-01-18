@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Plus, Pencil, Trash2, Check, X, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useToast } from '@/components/ui/toast';
+import { useToast } from '@/components/ui/useToast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
@@ -111,23 +111,23 @@ export const ListComponent: React.FC<ListComponentProps> = ({
   const updateItemsPositionsMutation = useMutation({
     mutationFn: (updates: { itemId: string; position: number }[]) =>
       Promise.all(updates.map(u => apiClient.updateListItem(list.id, u.itemId, { position: u.position }))),
-    onMutate: async (updates) => {
+    onMutate: async (updates: { itemId: string; position: number }[]) => {
       await queryClient.cancelQueries({ queryKey: ['list-items', list.id] });
-      const previous = queryClient.getQueryData(['list-items', list.id]);
+      const previous = queryClient.getQueryData<ListItem[]>(['list-items', list.id]);
 
-      queryClient.setQueryData(['list-items', list.id], (old: any) => {
+      queryClient.setQueryData<ListItem[]>(['list-items', list.id], (old) => {
         if (!old) return old;
-        const mutated = old.map((it: any) => ({ ...it }));
+        const mutated = old.map((it) => ({ ...it }));
         updates.forEach(u => {
-          const idx = mutated.findIndex((x: any) => x.id === u.itemId);
+          const idx = mutated.findIndex((x) => x.id === u.itemId);
           if (idx !== -1) mutated[idx] = { ...mutated[idx], position: u.position };
         });
-        return mutated.slice().sort((a: any, b: any) => a.position - b.position);
+        return mutated.slice().sort((a, b) => a.position - b.position);
       });
 
       return { previous };
     },
-    onError: (err, _vars, context: any) => {
+    onError: (err, _vars, context?: { previous?: ListItem[] }) => {
       if (context?.previous) {
         queryClient.setQueryData(['list-items', list.id], context.previous);
       }

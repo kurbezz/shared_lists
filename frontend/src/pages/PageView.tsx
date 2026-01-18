@@ -18,7 +18,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useTranslation } from 'react-i18next';
 import type { List } from '../types';
 import UserMenu from '../components/UserMenu';
-import { useToast } from '@/components/ui/toast';
+import { useToast } from '@/components/ui/useToast';
 
 export const PageView: React.FC = () => {
   const { t } = useTranslation();
@@ -60,7 +60,7 @@ export const PageView: React.FC = () => {
       notify(t('page.load_error'));
       navigate('/');
     }
-  }, [pageError, navigate, t]);
+  }, [pageError, navigate, t, notify]);
 
   // Mutations
   const addListMutation = useMutation({
@@ -160,7 +160,7 @@ export const PageView: React.FC = () => {
 
       return { previous };
     },
-    onError: (err, _vars, context: any) => {
+    onError: (err, _vars, context?: { previous?: List[] }) => {
       if (context?.previous) {
         queryClient.setQueryData(['lists', pageId], context.previous);
       }

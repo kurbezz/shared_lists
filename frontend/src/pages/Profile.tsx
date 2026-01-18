@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { useTranslation } from 'react-i18next';
 import UserMenu from '../components/UserMenu';
 import i18n from '../i18n';
-import { useToast } from '@/components/ui/toast';
+import { useToast } from '@/components/ui/useToast';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { X } from 'lucide-react';
@@ -29,21 +29,22 @@ export const Profile: React.FC = () => {
     notify(t('profile.saved'));
   };
 
-  const fetchKeys = async () => {
+  const fetchKeys = useCallback(async () => {
     setLoadingKeys(true);
     try {
       const keys = await apiClient.getApiKeys();
       setApiKeys(keys);
-    } catch (err: any) {
+    } catch (error) {
+      console.error('Failed to fetch API keys:', error);
       notify(t('profile.fetch_failed'));
     } finally {
       setLoadingKeys(false);
     }
-  };
+  }, [notify, t]);
 
   useEffect(() => {
     fetchKeys();
-  }, []);
+  }, [fetchKeys]);
 
   const handleCreate = async () => {
     const scopesArr = scopes
@@ -57,15 +58,15 @@ export const Profile: React.FC = () => {
       notify(t('profile.created_notify'));
       try {
         await navigator.clipboard.writeText(resp.token);
-      } catch (e) {
+      } catch {
         // ignore clipboard errors
       }
       setName('');
       setScopes('');
       fetchKeys();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Create API key failed:', err);
-      const msg = err?.message || err?.toString() || t('profile.create_failed');
+      const msg = err instanceof Error ? err.message : String(err) || t('profile.create_failed');
       notify(msg);
     }
   };
@@ -76,7 +77,7 @@ export const Profile: React.FC = () => {
       await apiClient.revokeApiKey(id);
       notify(t('profile.revoked_success'));
       fetchKeys();
-    } catch (err) {
+    } catch {
       notify(t('profile.revoke_failed'));
     }
   };
@@ -87,7 +88,7 @@ export const Profile: React.FC = () => {
       await apiClient.deleteApiKey(id);
       notify(t('profile.delete_success'));
       fetchKeys();
-    } catch (err) {
+    } catch {
       notify(t('profile.delete_failed'));
     }
   };

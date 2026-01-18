@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/useAuth';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from 'react-i18next';
 import { LogOut, Settings, ChevronDown } from 'lucide-react';

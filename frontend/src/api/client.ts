@@ -18,6 +18,7 @@ import type {
   PublicPageData,
   ApiKey,
   CreateApiKeyResponse,
+  UpdateUser,
 } from '../types';
 
 // Determine API base URL from browser origin
@@ -70,8 +71,18 @@ class ApiClient {
     }
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({} as any));
-      const msg = (errorData && (errorData.error || errorData.message)) || response.statusText || `HTTP error! status: ${response.status}`;
+      const errorData = await response.json().catch(() => ({} as Record<string, unknown>));
+
+      const getErrorMessageFromData = (d: Record<string, unknown> | null) => {
+        if (!d) return undefined;
+        const maybeError = d['error'];
+        if (typeof maybeError === 'string') return maybeError;
+        const maybeMessage = d['message'];
+        if (typeof maybeMessage === 'string') return maybeMessage;
+        return undefined;
+      };
+
+      const msg = getErrorMessageFromData(errorData) || response.statusText || `HTTP error! status: ${response.status}`;
       // Log full response for easier debugging
       console.error('API error response', { url: url.toString(), status: response.status, body: errorData });
       throw new Error(msg);
@@ -86,7 +97,7 @@ class ApiClient {
       const text = await response.text();
       if (!text) return undefined as T;
       return JSON.parse(text) as T;
-    } catch (e) {
+    } catch {
       // If parsing fails, return undefined instead of throwing to avoid showing spurious errors
       return undefined as T;
     }
@@ -108,7 +119,7 @@ class ApiClient {
     return this.request<User>(`/users/me`);
   }
 
-  async updateCurrentUser(data: any): Promise<User> {
+  async updateCurrentUser(data: UpdateUser): Promise<User> {
     return this.request<User>(`/users/me`, {
       method: 'PATCH',
       body: JSON.stringify(data),

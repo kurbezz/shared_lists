@@ -1,24 +1,9 @@
-import React, { createContext, useCallback, useContext, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 
-type Toast = {
-  id: string;
-  message: string;
-};
-
-type ToastContextType = {
-  notify: (message: string, ms?: number) => void;
-};
-
-const ToastContext = createContext<ToastContextType | undefined>(undefined);
-
-export const useToast = (): ToastContextType => {
-  const ctx = useContext(ToastContext);
-  if (!ctx) throw new Error('useToast must be used within ToastProvider');
-  return ctx;
-};
+import { ToastContext } from './toastTypes';
 
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [toasts, setToasts] = useState<import('./toastTypes').Toast[]>([]);
 
   const remove = useCallback((id: string) => {
     setToasts((t) => t.filter((x) => x.id !== id));

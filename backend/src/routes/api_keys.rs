@@ -171,7 +171,7 @@ mod tests {
     #[tokio::test]
     async fn test_delete_api_key_success() -> anyhow::Result<()> {
 use axum::http::{Request, Method};
-        use axum::body::{self, Body};
+        use axum::body::Body;
     use std::collections::HashMap;
     use tower::util::ServiceExt;
 

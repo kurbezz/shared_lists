@@ -110,13 +110,10 @@ export function ShareDialog({ page }: ShareDialogProps) {
             setSearchQuery('');
             setSearchResults([]);
         }
-    }, [open]);
+    }, [open, page.public_slug]);
 
     // Memoize existing user IDs to avoid re-running the effect
-    const existingUserIds = useMemo(
-        () => new Set(permissions.map(p => p.user_id)),
-        [permissions.length, permissions.map(p => p.user_id).join(',')]
-    );
+    const existingUserIds = useMemo(() => new Set(permissions.map(p => p.user_id)), [permissions]);
 
     // Handle Search with debounce
     useEffect(() => {

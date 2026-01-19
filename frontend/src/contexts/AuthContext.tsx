@@ -2,17 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import type { User } from '../types';
 
-import { AuthContext } from './authContext';
-
-interface AuthContextType {
-  user: User | null;
-  token: string | null;
-  login: (token: string) => void;
-  logout: () => void;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  refreshUser?: () => Promise<void>;
-}
+import { AuthContext } from './authContext.types';
+import type { AuthContextType } from './authContext.types';
 
 
 interface AuthProviderProps {

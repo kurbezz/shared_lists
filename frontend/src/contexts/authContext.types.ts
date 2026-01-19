@@ -1,5 +1,5 @@
-import React from 'react';
-
+// Auth context types and value (kept separate from component files to enable fast refresh)
+import { createContext } from 'react';
 import type { User } from '../types';
 
 export interface AuthContextType {
@@ -12,4 +12,5 @@ export interface AuthContextType {
   refreshUser?: () => Promise<void>;
 }
 
-export const AuthContext = React.createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+AuthContext.displayName = 'AuthContext';

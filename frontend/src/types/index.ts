@@ -42,6 +42,8 @@ export interface List {
   page_id: string;
   title: string;
   position: number;
+  show_checkboxes: boolean;
+  show_progress: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -73,11 +75,15 @@ export interface UpdatePage {
 export interface CreateList {
   title: string;
   position?: number;
+  show_checkboxes?: boolean;
+  show_progress?: boolean;
 }
 
 export interface UpdateList {
   title?: string;
   position?: number;
+  show_checkboxes?: boolean;
+  show_progress?: boolean;
 }
 
 export interface CreateListItem {

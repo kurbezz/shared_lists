@@ -19,7 +19,6 @@ pub struct ListsRouterState {
     pub page_repo: Arc<PageRepository>,
 }
 
-
 pub fn lists_router(state: ListsRouterState) -> Router {
     Router::new()
         .route("/pages/:page_id/lists", get(list_lists).post(create_list))
@@ -65,7 +64,11 @@ async fn create_list(
         .map_err(|_| AppError::BadRequest("Invalid user ID".to_string()))?;
 
     // Check if user can edit
-    if !state.page_repo.check_edit_permission(page_id, user_id).await? {
+    if !state
+        .page_repo
+        .check_edit_permission(page_id, user_id)
+        .await?
+    {
         return Err(AppError::Forbidden);
     }
 
@@ -110,7 +113,11 @@ async fn update_list(
         .map_err(|_| AppError::BadRequest("Invalid user ID".to_string()))?;
 
     // Check if user can edit
-    if !state.page_repo.check_edit_permission(page_id, user_id).await? {
+    if !state
+        .page_repo
+        .check_edit_permission(page_id, user_id)
+        .await?
+    {
         return Err(AppError::Forbidden);
     }
 
@@ -133,7 +140,11 @@ async fn delete_list(
         .map_err(|_| AppError::BadRequest("Invalid user ID".to_string()))?;
 
     // Check if user can edit
-    if !state.page_repo.check_edit_permission(page_id, user_id).await? {
+    if !state
+        .page_repo
+        .check_edit_permission(page_id, user_id)
+        .await?
+    {
         return Err(AppError::Forbidden);
     }
 
@@ -186,7 +197,11 @@ async fn create_item(
         .ok_or(AppError::NotFound)?;
 
     // Check if user can edit
-    if !state.page_repo.check_edit_permission(page_id, user_id).await? {
+    if !state
+        .page_repo
+        .check_edit_permission(page_id, user_id)
+        .await?
+    {
         return Err(AppError::Forbidden);
     }
 
@@ -243,7 +258,11 @@ async fn update_item(
         .ok_or(AppError::NotFound)?;
 
     // Check if user can edit
-    if !state.page_repo.check_edit_permission(page_id, user_id).await? {
+    if !state
+        .page_repo
+        .check_edit_permission(page_id, user_id)
+        .await?
+    {
         return Err(AppError::Forbidden);
     }
 
@@ -273,7 +292,11 @@ async fn delete_item(
         .ok_or(AppError::NotFound)?;
 
     // Check if user can edit
-    if !state.page_repo.check_edit_permission(page_id, user_id).await? {
+    if !state
+        .page_repo
+        .check_edit_permission(page_id, user_id)
+        .await?
+    {
         return Err(AppError::Forbidden);
     }
 
@@ -285,10 +308,10 @@ async fn delete_item(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::{CreatePage, CreateUser};
     use crate::tests_utils::setup_db;
-    use crate::models::{CreateUser, CreatePage};
-    use axum::http::{Request, Method};
     use axum::body::{self, Body};
+    use axum::http::{Method, Request};
     use tower::util::ServiceExt;
 
     async fn create_test_user(
@@ -322,16 +345,19 @@ mod tests {
     async fn test_create_and_list_lists() -> anyhow::Result<()> {
         let pool = setup_db().await;
         let user = create_test_user(&pool, "tw1", "user1").await?;
-        
+
         let page_repo = Arc::new(crate::repositories::PageRepository::new(pool.clone()));
         let list_repo = Arc::new(crate::repositories::ListRepository::new(pool.clone()));
 
         // Create a page
         let page = page_repo
-            .create(user.id, CreatePage {
-                title: "Test Page".to_string(),
-                description: None,
-            })
+            .create(
+                user.id,
+                CreatePage {
+                    title: "Test Page".to_string(),
+                    description: None,
+                },
+            )
             .await?;
 
         let state = ListsRouterState {
@@ -382,22 +408,30 @@ mod tests {
     async fn test_update_and_delete_list() -> anyhow::Result<()> {
         let pool = setup_db().await;
         let user = create_test_user(&pool, "tw2", "user2").await?;
-        
+
         let page_repo = Arc::new(crate::repositories::PageRepository::new(pool.clone()));
         let list_repo = Arc::new(crate::repositories::ListRepository::new(pool.clone()));
 
         let page = page_repo
-            .create(user.id, CreatePage {
-                title: "Page".to_string(),
-                description: None,
-            })
+            .create(
+                user.id,
+                CreatePage {
+                    title: "Page".to_string(),
+                    description: None,
+                },
+            )
             .await?;
 
         let list = list_repo
-            .create_list(page.id, crate::models::CreateList {
-                title: "Old Title".to_string(),
-                position: None,
-            })
+            .create_list(
+                page.id,
+                crate::models::CreateList {
+                    title: "Old Title".to_string(),
+                    position: None,
+                    show_checkboxes: None,
+                    show_progress: None,
+                },
+            )
             .await?;
 
         let state = ListsRouterState {
@@ -443,22 +477,30 @@ mod tests {
     async fn test_items_crud() -> anyhow::Result<()> {
         let pool = setup_db().await;
         let user = create_test_user(&pool, "tw3", "user3").await?;
-        
+
         let page_repo = Arc::new(crate::repositories::PageRepository::new(pool.clone()));
         let list_repo = Arc::new(crate::repositories::ListRepository::new(pool.clone()));
 
         let page = page_repo
-            .create(user.id, CreatePage {
-                title: "Page".to_string(),
-                description: None,
-            })
+            .create(
+                user.id,
+                CreatePage {
+                    title: "Page".to_string(),
+                    description: None,
+                },
+            )
             .await?;
 
         let list = list_repo
-            .create_list(page.id, crate::models::CreateList {
-                title: "List".to_string(),
-                position: None,
-            })
+            .create_list(
+                page.id,
+                crate::models::CreateList {
+                    title: "List".to_string(),
+                    position: None,
+                    show_checkboxes: None,
+                    show_progress: None,
+                },
+            )
             .await?;
 
         let state = ListsRouterState {
@@ -542,22 +584,30 @@ mod tests {
         let pool = setup_db().await;
         let owner = create_test_user(&pool, "owner", "owner").await?;
         let other = create_test_user(&pool, "other", "other").await?;
-        
+
         let page_repo = Arc::new(crate::repositories::PageRepository::new(pool.clone()));
         let list_repo = Arc::new(crate::repositories::ListRepository::new(pool.clone()));
 
         let page = page_repo
-            .create(owner.id, CreatePage {
-                title: "Private Page".to_string(),
-                description: None,
-            })
+            .create(
+                owner.id,
+                CreatePage {
+                    title: "Private Page".to_string(),
+                    description: None,
+                },
+            )
             .await?;
 
         let _list = list_repo
-            .create_list(page.id, crate::models::CreateList {
-                title: "List".to_string(),
-                position: None,
-            })
+            .create_list(
+                page.id,
+                crate::models::CreateList {
+                    title: "List".to_string(),
+                    position: None,
+                    show_checkboxes: None,
+                    show_progress: None,
+                },
+            )
             .await?;
 
         let state = ListsRouterState {
@@ -565,7 +615,7 @@ mod tests {
             list_repo,
         };
         let app = lists_router(state);
-        
+
         // Try to access as unauthorized user
         let other_claims = create_claims(&other);
 
@@ -581,4 +631,3 @@ mod tests {
         Ok(())
     }
 }
-

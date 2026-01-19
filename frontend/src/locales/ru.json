@@ -114,10 +114,12 @@
         "update_error": "Не удалось обновить элемент",
         "delete_error": "Не удалось удалить элемент",
         "delete_confirm": "Удалить этот список и все его элементы?",
-        "edit_title_hint": "Редактировать название",
+        "edit_title_hint": "Редактировать заголовок",
         "delete_list_hint": "Удалить список",
         "empty": "Список пуст",
         "add_item_placeholder": "Добавить элемент...",
+        "show_checkboxes_on_public": "Показывать чекбоксы на публичной странице",
+        "show_progress_on_public": "Показывать прогресс на публичной странице",
         "delete_item_confirm": "Удалить этот элемент?"
     },
     "auth": {

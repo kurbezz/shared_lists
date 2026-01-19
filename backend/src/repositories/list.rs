@@ -1,8 +1,6 @@
-use crate::models::{
-    CreateList, CreateListItem, List, ListItem, UpdateList, UpdateListItem,
-};
+use crate::models::{CreateList, CreateListItem, List, ListItem, UpdateList, UpdateListItem};
 use anyhow::Result;
-use sqlx::{SqlitePool, Sqlite, QueryBuilder};
+use sqlx::{QueryBuilder, Sqlite, SqlitePool};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -47,11 +45,14 @@ impl ListRepository {
             max_pos.unwrap_or(-1) + 1
         };
 
+        let show_checkboxes = data.show_checkboxes.unwrap_or(true);
+        let show_progress = data.show_progress.unwrap_or(true);
+
         let id = Uuid::new_v4();
         let list = sqlx::query_as::<_, List>(
             r#"
-            INSERT INTO lists (id, page_id, title, position)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO lists (id, page_id, title, position, show_checkboxes, show_progress)
+            VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING *
             "#,
         )
@@ -59,6 +60,8 @@ impl ListRepository {
         .bind(page_id)
         .bind(&data.title)
         .bind(position)
+        .bind(show_checkboxes as i32)
+        .bind(show_progress as i32)
         .fetch_one(&self.pool)
         .await?;
         Ok(list)
@@ -83,7 +86,21 @@ impl ListRepository {
             separated.push_bind_unseparated(position);
         }
 
-        if data.title.is_none() && data.position.is_none() {
+        if let Some(show_checkboxes) = &data.show_checkboxes {
+            separated.push("show_checkboxes = ");
+            separated.push_bind_unseparated(*show_checkboxes as i32);
+        }
+
+        if let Some(show_progress) = &data.show_progress {
+            separated.push("show_progress = ");
+            separated.push_bind_unseparated(*show_progress as i32);
+        }
+
+        if data.title.is_none()
+            && data.position.is_none()
+            && data.show_checkboxes.is_none()
+            && data.show_progress.is_none()
+        {
             return self.find_by_id(id, page_id).await;
         }
 
@@ -120,12 +137,13 @@ impl ListRepository {
     }
 
     pub async fn find_item_by_id(&self, id: Uuid, list_id: Uuid) -> Result<Option<ListItem>> {
-        let item =
-            sqlx::query_as::<_, ListItem>("SELECT * FROM list_items WHERE id = $1 AND list_id = $2")
-                .bind(id)
-                .bind(list_id)
-                .fetch_optional(&self.pool)
-                .await?;
+        let item = sqlx::query_as::<_, ListItem>(
+            "SELECT * FROM list_items WHERE id = $1 AND list_id = $2",
+        )
+        .bind(id)
+        .bind(list_id)
+        .fetch_optional(&self.pool)
+        .await?;
         Ok(item)
     }
 
@@ -221,8 +239,8 @@ impl ListRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::{CreateList, CreateListItem, CreatePage, CreateUser};
     use crate::tests_utils::setup_db;
-    use crate::models::{CreateUser, CreatePage, CreateList, CreateListItem};
 
     #[tokio::test]
     async fn test_list_and_items_crud() -> anyhow::Result<()> {
@@ -243,25 +261,68 @@ mod tests {
             .await?;
 
         let page = page_repo
-            .create(creator.id, CreatePage { title: "P".to_string(), description: None })
+            .create(
+                creator.id,
+                CreatePage {
+                    title: "P".to_string(),
+                    description: None,
+                },
+            )
             .await?;
 
         // Create lists
         let l1 = repo
-            .create_list(page.id, CreateList { title: "L1".to_string(), position: None })
+            .create_list(
+                page.id,
+                CreateList {
+                    title: "L1".to_string(),
+                    position: None,
+                    show_checkboxes: None,
+                    show_progress: None,
+                },
+            )
             .await?;
         let l2 = repo
-            .create_list(page.id, CreateList { title: "L2".to_string(), position: None })
+            .create_list(
+                page.id,
+                CreateList {
+                    title: "L2".to_string(),
+                    position: None,
+                    show_checkboxes: None,
+                    show_progress: None,
+                },
+            )
             .await?;
 
         let lists = repo.list_by_page_id(page.id).await?;
         assert_eq!(lists.len(), 2);
         assert_eq!(lists[0].title, "L1");
         assert_eq!(lists[1].title, "L2");
+        // default settings should be enabled
+        assert!(lists[0].show_checkboxes);
+        assert!(lists[0].show_progress);
+        assert!(lists[1].show_checkboxes);
+        assert!(lists[1].show_progress);
 
         // Create items
-        let i1 = repo.create_item(l1.id, CreateListItem { content: "a".to_string(), position: None }).await?;
-        let i2 = repo.create_item(l1.id, CreateListItem { content: "b".to_string(), position: None }).await?;
+        let i1 = repo
+            .create_item(
+                l1.id,
+                CreateListItem {
+                    content: "a".to_string(),
+                    position: None,
+                },
+            )
+            .await?;
+        let i2 = repo
+            .create_item(
+                l1.id,
+                CreateListItem {
+                    content: "b".to_string(),
+                    position: None,
+                },
+            )
+            .await?;
 
         let items = repo.list_items_by_list_id(l1.id).await?;
         assert_eq!(items.len(), 2);
@@ -269,11 +330,36 @@ mod tests {
         assert_eq!(items[1].content, "b");
 
         // Update list
-        let updated_list = repo.update_list(l2.id, page.id, crate::models::UpdateList { title: Some("L2-new".to_string()), position: Some(0)}).await?.expect("list exists");
+        let updated_list = repo
+            .update_list(
+                l2.id,
+                page.id,
+                crate::models::UpdateList {
+                    title: Some("L2-new".to_string()),
+                    position: Some(0),
+                    show_checkboxes: Some(false),
+                    show_progress: Some(false),
+                },
+            )
+            .await?
+            .expect("list exists");
         assert_eq!(updated_list.title, "L2-new");
+        assert!(!updated_list.show_checkboxes);
+        assert!(!updated_list.show_progress);
 
         // Update item
-        let updated_item = repo.update_item(i1.id, l1.id, crate::models::UpdateListItem{ content: Some("a-up".to_string()), checked: Some(true), position: Some(1)}).await?.expect("item exists");
+        let updated_item = repo
+            .update_item(
+                i1.id,
+                l1.id,
+                crate::models::UpdateListItem {
+                    content: Some("a-up".to_string()),
+                    checked: Some(true),
+                    position: Some(1),
+                },
+            )
+            .await?
+            .expect("item exists");
         assert_eq!(updated_item.content, "a-up");
         assert!(updated_item.checked);
 
@@ -289,4 +375,3 @@ mod tests {
         Ok(())
     }
 }
-

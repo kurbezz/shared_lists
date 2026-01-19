@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { List, UpdateListItem, ListItem } from '../types';
+import type { List, UpdateList, UpdateListItem, ListItem } from '../types';
 import { apiClient } from '../api/client';
 import { ListItemComponent } from './ListItemComponent';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, Pencil, Trash2, Check, X, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/components/ui/useToast';
@@ -18,7 +19,7 @@ import { CSS } from '@dnd-kit/utilities';
 interface ListComponentProps {
   list: List;
   canEdit: boolean;
-  onUpdate: (listId: string, title: string) => Promise<void>;
+  onUpdate: (listId: string, data: Partial<UpdateList>) => Promise<void>;
   onDelete: (listId: string) => Promise<void>;
 }
 
@@ -33,8 +34,16 @@ export const ListComponent: React.FC<ListComponentProps> = ({
   const { notify } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(list.title);
+  const [showCheckBoxes, setShowCheckBoxes] = useState<boolean>(list.show_checkboxes);
+  const [showProgress, setShowProgress] = useState<boolean>(list.show_progress);
   const [newItemContent, setNewItemContent] = useState('');
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+
+  useEffect(() => {
+    setEditTitle(list.title);
+    setShowCheckBoxes(list.show_checkboxes);
+    setShowProgress(list.show_progress);
+  }, [list]);
 
   // Queries
   const { data: items = [], isLoading } = useQuery({
@@ -79,14 +88,26 @@ export const ListComponent: React.FC<ListComponentProps> = ({
   });
 
   const handleUpdateTitle = async () => {
-    if (editTitle.trim() && editTitle !== list.title) {
-      await onUpdate(list.id, editTitle.trim());
+    const titleChanged = editTitle.trim() && editTitle !== list.title;
+    const checkboxesChanged = showCheckBoxes !== list.show_checkboxes;
+    const progressChanged = showProgress !== list.show_progress;
+
+    if (titleChanged || checkboxesChanged || progressChanged) {
+      let payload: Partial<UpdateList> = {};
+      if (titleChanged) payload.title = editTitle.trim();
+      if (checkboxesChanged) payload.show_checkboxes = showCheckBoxes;
+      if (progressChanged) payload.show_progress = showProgress;
+
+      await onUpdate(list.id, payload);
     }
+
     setIsEditing(false);
   };
 
   const handleCancelEdit = () => {
     setEditTitle(list.title);
+    setShowCheckBoxes(list.show_checkboxes);
+    setShowProgress(list.show_progress);
     setIsEditing(false);
   };
 
@@ -210,21 +231,34 @@ export const ListComponent: React.FC<ListComponentProps> = ({
       {/* List Header */}
       <CardHeader className="p-3 pb-2 space-y-0 relative group">
         {isEditing ? (
-          <div className="flex gap-1 items-center">
-            <Input
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              onKeyDown={handleTitleKeyDown}
-              onBlur={handleUpdateTitle}
-              autoFocus
-              className="h-8 font-semibold text-lg px-2"
-            />
-            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleUpdateTitle} onMouseDown={(e) => e.preventDefault()}>
-              <Check className="h-4 w-4" />
-            </Button>
-            <Button size="icon" variant="destructive" className="h-8 w-8" onClick={handleCancelEdit} onMouseDown={(e) => e.preventDefault()}>
-              <X className="h-4 w-4" />
-            </Button>
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-1 items-center">
+              <Input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                onKeyDown={handleTitleKeyDown}
+                onBlur={handleUpdateTitle}
+                autoFocus
+                className="h-8 font-semibold text-lg px-2"
+              />
+              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleUpdateTitle} onMouseDown={(e) => e.preventDefault()}>
+                <Check className="h-4 w-4" />
+              </Button>
+              <Button size="icon" variant="destructive" className="h-8 w-8" onClick={handleCancelEdit} onMouseDown={(e) => e.preventDefault()}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-4 text-sm">
+              <label className="flex items-center gap-2" onMouseDown={(e) => e.preventDefault()} onPointerDown={(e) => e.preventDefault()}>
+                <Checkbox checked={showCheckBoxes} onCheckedChange={(v) => setShowCheckBoxes(!!v)} onMouseDown={(e) => e.preventDefault()} onPointerDown={(e) => e.preventDefault()} />
+                <span>{t('list.show_checkboxes_on_public')}</span>
+              </label>
+              <label className="flex items-center gap-2" onMouseDown={(e) => e.preventDefault()} onPointerDown={(e) => e.preventDefault()}>
+                <Checkbox checked={showProgress} onCheckedChange={(v) => setShowProgress(!!v)} onMouseDown={(e) => e.preventDefault()} onPointerDown={(e) => e.preventDefault()} />
+                <span>{t('list.show_progress_on_public')}</span>
+              </label>
+            </div>
           </div>
         ) : (
           <div className="flex items-center justify-between">

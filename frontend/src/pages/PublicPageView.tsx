@@ -178,13 +178,19 @@ function ListCard({ list }: ListCardProps) {
                         <CardTitle className="text-xl font-bold line-clamp-2 flex-1">
                             {list.title}
                         </CardTitle>
-                        <Badge variant="outline" className="shrink-0 bg-primary/10 text-primary border-primary/20">
-                            {completedCount}/{totalCount}
-                        </Badge>
+                        {list.show_progress ? (
+                            <Badge variant="outline" className="shrink-0 bg-primary/10 text-primary border-primary/20">
+                                {completedCount}/{totalCount}
+                            </Badge>
+                        ) : (
+                            <Badge variant="outline" className="shrink-0 bg-primary/10 text-primary border-primary/20">
+                                {t('public.items_count', { count: totalCount })}
+                            </Badge>
+                        )}
                     </div>
 
                     {/* Progress Bar */}
-                    {totalCount > 0 && (
+                    {totalCount > 0 && list.show_progress && (
                         <div className="space-y-2">
                             <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                                 <div
@@ -215,16 +221,18 @@ function ListCard({ list }: ListCardProps) {
                                 key={item.id}
                                 className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors group"
                             >
-                                <div className="flex-shrink-0 mt-1">
-                                    <Checkbox
-                                        checked={item.checked}
-                                        disabled
-                                        className="cursor-default"
-                                    />
-                                </div>
+                                {list.show_checkboxes && (
+                                    <div className="flex-shrink-0 mt-1">
+                                        <Checkbox
+                                            checked={item.checked}
+                                            disabled
+                                            className="cursor-default"
+                                        />
+                                    </div>
+                                )}
                                 <span
                                     className={`text-sm leading-relaxed break-words transition-all ${
-                                        item.checked
+                                        item.checked && list.show_checkboxes
                                             ? 'line-through text-muted-foreground/60'
                                             : 'text-foreground'
                                     }`}

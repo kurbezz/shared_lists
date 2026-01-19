@@ -16,7 +16,7 @@ import type { DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useTranslation } from 'react-i18next';
-import type { List, PageWithPermission } from '../types';
+import type { List, PageWithPermission, UpdateList } from '../types';
 import UserMenu from '../components/UserMenu';
 import { useToast } from '@/components/ui/useToast';
 
@@ -90,8 +90,8 @@ export const PageView: React.FC = () => {
   });
 
   const updateListMutation = useMutation({
-    mutationFn: ({ listId, title }: { listId: string; title: string }) =>
-      apiClient.updateList(pageId!, listId, { title }),
+    mutationFn: ({ listId, data }: { listId: string; data: Partial<UpdateList> }) =>
+      apiClient.updateList(pageId!, listId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lists', pageId] });
     },
@@ -144,9 +144,9 @@ export const PageView: React.FC = () => {
     addListMutation.mutate(newListTitle.trim());
   };
 
-  const handleUpdateList = async (listId: string, title: string) => {
+  const handleUpdateList = async (listId: string, data: Partial<UpdateList>) => {
     if (!pageId) return;
-    updateListMutation.mutate({ listId, title });
+    updateListMutation.mutate({ listId, data });
   };
 
   const handleDeleteList = async (listId: string) => {

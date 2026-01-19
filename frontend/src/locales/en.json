@@ -118,6 +118,8 @@
         "delete_list_hint": "Delete list",
         "empty": "List is empty",
         "add_item_placeholder": "Add item...",
+        "show_checkboxes_on_public": "Show checkboxes on public page",
+        "show_progress_on_public": "Show progress on public page",
         "delete_item_confirm": "Delete this item?"
     },
     "auth": {

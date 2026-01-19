@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider } from './contexts/AuthContext.tsx';
 import { useAuth } from './contexts/useAuth';
 import { ToastProvider } from './components/ui/toast';
 import { Login } from './pages/Login';

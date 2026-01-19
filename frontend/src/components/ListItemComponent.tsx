@@ -113,10 +113,11 @@ export const ListItemComponent: React.FC<ListItemComponentProps> = ({
           </Button>
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-between overflow-hidden">
+        <div className={cn('flex-1 flex justify-between', canEdit ? 'items-start overflow-visible' : 'items-center overflow-hidden')}>
           <span
             className={cn(
-              "flex-1 text-sm transition-all duration-200 break-all truncate mr-2",
+              "flex-1 text-sm transition-all duration-200 break-words mr-2",
+              canEdit ? 'whitespace-normal' : 'truncate',
               item.checked ? 'line-through text-muted-foreground' : 'text-foreground'
             )}
             onDoubleClick={() => canEdit && setIsEditing(true)}

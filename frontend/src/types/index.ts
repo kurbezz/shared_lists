@@ -143,4 +143,4 @@ export interface CreateApiKeyRequest {
 export interface CreateApiKeyResponse {
   id: string;
   token: string;
-} 
+}

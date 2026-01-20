@@ -1,43 +1,31 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '../contexts/useAuth';
-import { Card, CardContent } from '@/components/ui/card';
-import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '@/hooks/useAuth';
+import { Loader2 } from 'lucide-react';
 
-export const AuthCallback: React.FC = () => {
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const { login, isAuthenticated } = useAuth();
+export function AuthCallback() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { login } = useAuth();
 
   useEffect(() => {
     const token = searchParams.get('token');
-
+    
     if (token) {
       login(token);
+      navigate('/', { replace: true });
     } else {
-      navigate('/login');
+      navigate('/login', { replace: true });
     }
   }, [searchParams, login, navigate]);
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/');
-    }
-  }, [isAuthenticated, navigate]);
-
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <Card className="w-full max-w-sm shadow-lg text-center p-6">
-        <CardContent className="flex flex-col items-center justify-center p-6 gap-4">
-          <Loader2 className="h-12 w-12 animate-spin text-primary" />
-          <div className="space-y-1">
-            <h2 className="text-xl font-semibold">{t('auth.callback_title')}</h2>
-            <p className="text-muted-foreground text-sm">{t('auth.callback_desc')}</p>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background">
+      <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+      <h1 className="text-xl font-semibold">{t('auth.callback_title')}</h1>
+      <p className="text-muted-foreground">{t('auth.callback_desc')}</p>
     </div>
   );
-};
+}

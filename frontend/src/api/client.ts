@@ -21,17 +21,10 @@ import type {
   UpdateUser,
 } from '../types';
 
-// Determine API base URL from browser origin
-// In development: window.location.origin will be http://localhost:5173
-// In production: window.location.origin will be the actual domain
 const getApiBaseUrl = (): string => {
-  // Check if VITE_API_URL is explicitly set (for custom configurations)
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL;
   }
-  
-  // Use browser's origin + /api path
-  // This works for both development (with Vite proxy) and production
   return `${window.location.origin}/api`;
 };
 
@@ -83,7 +76,6 @@ class ApiClient {
       };
 
       const msg = getErrorMessageFromData(errorData) || response.statusText || `HTTP error! status: ${response.status}`;
-      // Log full response for easier debugging
       console.error('API error response', { url: url.toString(), status: response.status, body: errorData });
       throw new Error(msg);
     }
@@ -92,13 +84,11 @@ class ApiClient {
       return undefined as T;
     }
 
-    // Some successful endpoints return 200 with an empty body — handle that gracefully
     try {
       const text = await response.text();
       if (!text) return undefined as T;
       return JSON.parse(text) as T;
     } catch {
-      // If parsing fails, return undefined instead of throwing to avoid showing spurious errors
       return undefined as T;
     }
   }

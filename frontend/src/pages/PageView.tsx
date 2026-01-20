@@ -1,31 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '../api/client';
-import { ListComponent } from '../components/ListComponent';
-import { ShareDialog } from '../components/ShareDialog';
+import { useTranslation } from 'react-i18next';
+import type { List, PageWithPermission, UpdateList } from '@/types';
+import { apiClient } from '@/api/client';
+import { ListCard } from '@/components/ListCard';
+import { ShareDialog } from '@/components/ShareDialog';
+import { UserMenu } from '@/components/UserMenu';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, Trash2, Plus, Loader2, Check } from 'lucide-react';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { DndContext, closestCenter } from '@dnd-kit/core';
-import type { DragEndEvent } from '@dnd-kit/core';
-import { arrayMove, SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { toast } from 'sonner';
+import { ChevronLeft, Trash2, Plus, Loader2, Check, ListTodo } from 'lucide-react';
+import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useTranslation } from 'react-i18next';
-import type { List, PageWithPermission, UpdateList } from '../types';
-import UserMenu from '../components/UserMenu';
-import { useToast } from '@/components/ui/useToast';
 
-export const PageView: React.FC = () => {
+export function PageView() {
   const { t } = useTranslation();
   const { pageId } = useParams<{ pageId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { notify } = useToast();
 
   const [newListTitle, setNewListTitle] = useState('');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -57,20 +65,19 @@ export const PageView: React.FC = () => {
   useEffect(() => {
     if (pageError) {
       console.error('Failed to load page:', pageError);
-      notify(t('page.load_error'));
+      toast.error(t('page.load_error'));
       navigate('/');
     }
-  }, [pageError, navigate, t, notify]);
+  }, [pageError, navigate, t]);
 
-  // Watch global pages list — if the current page was deleted elsewhere, redirect to home
-  // Guard with `isFetched` to avoid running during refetch cycles and causing repeated navigations
+  // Watch global pages list
   const { data: pages = [], isFetched: pagesFetched } = useQuery<PageWithPermission[]>({
     queryKey: ['pages'],
     queryFn: () => apiClient.getPages(),
   });
 
   useEffect(() => {
-    if (!pagesFetched) return; // don't act while pages are loading/refetching
+    if (!pagesFetched) return;
     if (pageId && pages && !pages.find((p) => p.id === pageId)) {
       navigate('/');
     }
@@ -83,9 +90,8 @@ export const PageView: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['lists', pageId] });
       setNewListTitle('');
     },
-    onError: (error) => {
-      console.error('Failed to create list:', error);
-      notify(t('page.create_list_error'));
+    onError: () => {
+      toast.error(t('page.create_list_error'));
     },
   });
 
@@ -95,9 +101,8 @@ export const PageView: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lists', pageId] });
     },
-    onError: (error) => {
-      console.error('Failed to update list:', error);
-      notify(t('page.update_list_error'));
+    onError: () => {
+      toast.error(t('page.update_list_error'));
     },
   });
 
@@ -106,40 +111,65 @@ export const PageView: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lists', pageId] });
     },
-    onError: (error) => {
-      console.error('Failed to delete list:', error);
-      notify(t('page.delete_list_error'));
+    onError: () => {
+      toast.error(t('page.delete_list_error'));
     },
   });
 
   const updatePageMutation = useMutation({
-    mutationFn: (data: { title?: string; description?: string }) =>
-      apiClient.updatePage(pageId!, data),
+    mutationFn: (data: { title?: string; description?: string }) => apiClient.updatePage(pageId!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['page', pageId] });
       queryClient.invalidateQueries({ queryKey: ['pages'] });
       setIsEditingTitle(false);
       setIsEditingDesc(false);
     },
-    onError: (error) => {
-      console.error('Failed to update page:', error);
-      notify(t('page.update_title_error'));
+    onError: () => {
+      toast.error(t('page.update_title_error'));
     },
   });
 
   const deletePageMutation = useMutation({
     mutationFn: () => apiClient.deletePage(pageId!),
     onSuccess: () => {
-      // Invalidate list of pages; the pages watcher will redirect if the current page is gone.
       queryClient.invalidateQueries({ queryKey: ['pages'] });
     },
-    onError: (error) => {
-      console.error('Failed to delete page:', error);
-      notify(t('dashboard.delete_error'));
+    onError: () => {
+      toast.error(t('dashboard.delete_error'));
     },
   });
 
-  const handleAddList = async () => {
+  const updateListPositionsMutation = useMutation({
+    mutationFn: (updates: { listId: string; position: number }[]) =>
+      Promise.all(updates.map((u) => apiClient.updateList(pageId!, u.listId, { position: u.position }))),
+    onMutate: async (updates) => {
+      await queryClient.cancelQueries({ queryKey: ['lists', pageId] });
+      const previous = queryClient.getQueryData<List[]>(['lists', pageId]);
+
+      queryClient.setQueryData(['lists', pageId], (old?: List[]) => {
+        if (!old) return old;
+        const mutated = old.map((l) => ({ ...l }));
+        updates.forEach((u) => {
+          const idx = mutated.findIndex((x) => x.id === u.listId);
+          if (idx !== -1) mutated[idx] = { ...mutated[idx], position: u.position };
+        });
+        return mutated.slice().sort((a, b) => a.position - b.position);
+      });
+
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['lists', pageId], context.previous);
+      }
+      toast.error(t('page.update_list_error'));
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['lists', pageId] });
+    },
+  });
+
+  const handleAddList = () => {
     if (!pageId || !newListTitle.trim()) return;
     addListMutation.mutate(newListTitle.trim());
   };
@@ -154,92 +184,51 @@ export const PageView: React.FC = () => {
     deleteListMutation.mutate(listId);
   };
 
-  // Reordering lists (drag & drop) — batched optimistic update using TanStack Query
-  const updateListPositionsMutation = useMutation({
-    mutationFn: (updates: { listId: string; position: number }[]) =>
-      Promise.all(updates.map(u => apiClient.updateList(pageId!, u.listId, { position: u.position }))),
-    onMutate: async (updates) => {
-      await queryClient.cancelQueries({ queryKey: ['lists', pageId] });
-      const previous = queryClient.getQueryData<List[]>(['lists', pageId]);
-
-      queryClient.setQueryData(['lists', pageId], (old?: List[]) => {
-        if (!old) return old;
-        const mutated = old.map(l => ({ ...l }));
-        updates.forEach(u => {
-          const idx = mutated.findIndex(x => x.id === u.listId);
-          if (idx !== -1) mutated[idx] = { ...mutated[idx], position: u.position };
-        });
-        return mutated.slice().sort((a, b) => a.position - b.position);
-      });
-
-      return { previous };
-    },
-    onError: (err, _vars, context?: { previous?: List[] }) => {
-      if (context?.previous) {
-        queryClient.setQueryData(['lists', pageId], context.previous);
-      }
-      console.error('Failed to update list positions:', err);
-      notify(t('page.update_list_error'));
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['lists', pageId] }),
-  });
-
   const handleListsDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    const oldIndex = lists.findIndex(l => l.id === active.id);
-    const newIndex = lists.findIndex(l => l.id === over.id);
+    const oldIndex = lists.findIndex((l) => l.id === active.id);
+    const newIndex = lists.findIndex((l) => l.id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
 
     const newOrder = arrayMove(lists, oldIndex, newIndex).map((l, idx) => ({ ...l, position: idx }));
 
-    // Compute only changed positions
     const changed = newOrder
-      .map((l, idx) => ({ listId: l.id, position: idx, prev: lists.find(x => x.id === l.id)?.position }))
-      .filter(x => x.prev !== x.position)
-      .map(x => ({ listId: x.listId, position: x.position }));
+      .map((l, idx) => ({
+        listId: l.id,
+        position: idx,
+        prev: lists.find((x) => x.id === l.id)?.position,
+      }))
+      .filter((x) => x.prev !== x.position)
+      .map((x) => ({ listId: x.listId, position: x.position }));
 
     if (changed.length === 0) return;
 
-    // Trigger batched optimistic mutation
     updateListPositionsMutation.mutate(changed);
   };
 
-  // Sortable wrapper for lists
-  const SortableListItem: React.FC<{list: List}> = ({ list }) => {
+  const SortableListItem = ({ list }: { list: List }) => {
     const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: list.id });
     const style = {
       transform: CSS.Transform.toString(transform),
       transition,
-      touchAction: 'manipulation',
-    } as React.CSSProperties;
-
-    // Ignore pointerdown on interactive elements to allow focusing inputs, clicking buttons, etc.
-    const filteredListeners = {
-      ...listeners,
-      onPointerDown: (e: React.PointerEvent) => {
-        const target = e.target as HTMLElement | null;
-        if (target && target.closest && target.closest('input, textarea, button, a, select, [contenteditable="true"]')) return;
-        // Call original handler if present
-        (listeners as unknown as { onPointerDown?: (e: React.PointerEvent) => void }).onPointerDown?.(e);
-      },
-    } as typeof listeners;
+    };
 
     return (
-      <div ref={setNodeRef} style={style} {...attributes} {...filteredListeners} className="cursor-grab active:cursor-grabbing">
-        <ListComponent
+      <div ref={setNodeRef} style={style} {...attributes}>
+        <ListCard
           list={list}
           canEdit={page!.can_edit}
           onUpdate={handleUpdateList}
           onDelete={handleDeleteList}
+          dragHandleProps={listeners}
         />
       </div>
     );
   };
 
-
-  const handleUpdatePageTitle = async () => {
+  const handleUpdatePageTitle = () => {
     if (!pageId || !editPageTitle.trim() || editPageTitle === page?.title) {
       setIsEditingTitle(false);
       return;
@@ -247,7 +236,7 @@ export const PageView: React.FC = () => {
     updatePageMutation.mutate({ title: editPageTitle.trim() });
   };
 
-  const handleUpdatePageDescription = async () => {
+  const handleUpdatePageDescription = () => {
     if (!pageId || editPageDesc === (page?.description || '')) {
       setIsEditingDesc(false);
       return;
@@ -255,12 +244,11 @@ export const PageView: React.FC = () => {
     updatePageMutation.mutate({ description: editPageDesc.trim() || undefined });
   };
 
-  const handleDeletePage = async () => {
+  const handleDeletePage = () => {
     if (!pageId) return;
     deletePageMutation.mutate();
   };
 
-  // Navigate back in history if possible; fallback to home
   const handleBack = () => {
     try {
       if (window.history.length > 1) {
@@ -283,79 +271,87 @@ export const PageView: React.FC = () => {
   const handleKeyDownTitle = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      e.currentTarget.blur();
+      handleUpdatePageTitle();
     } else if (e.key === 'Escape') {
       setEditPageTitle(page?.title || '');
       setIsEditingTitle(false);
-      window.getSelection()?.removeAllRanges();
     }
   };
 
   const handleKeyDownDesc = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      e.currentTarget.blur();
+      handleUpdatePageDescription();
     } else if (e.key === 'Escape') {
       setEditPageDesc(page?.description || '');
       setIsEditingDesc(false);
-      window.getSelection()?.removeAllRanges();
     }
   };
 
   if (!page) {
     return (
-      <div className="flex items-center justify-center h-screen bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+        <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
       </div>
     );
   }
 
   return (
-    <div className="h-screen bg-background text-foreground flex flex-col">
+    <div className="h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex flex-col">
       {/* Header */}
-      <div className="border-b bg-card shadow-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
+      <header className="sticky top-0 z-10 border-b bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
+        <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-start justify-between gap-4">
-            <div className="flex-1 space-y-1">
+            <div className="flex-1 space-y-2">
               <div className="flex items-center gap-3">
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={handleBack}
                   title={t('page.back_to_pages')}
-                  className="mr-1 p-2"
-                  data-cy="back-to-dashboard-btn"
+                  className="shrink-0"
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </Button>
 
-                {isEditingTitle ? (
-                  <div className="flex items-center gap-2 flex-1 max-w-lg">
-                    <Input
-                      value={editPageTitle}
-                      onChange={(e) => setEditPageTitle(e.target.value)}
-                      onKeyDown={handleKeyDownTitle}
-                      onBlur={handleUpdatePageTitle} // Keep blur for now
-                      autoFocus
-                      className="text-xl md:text-2xl font-bold h-10"
-                    />
-                    <Button size="icon" variant="ghost" className="h-9 w-9" onClick={handleUpdatePageTitle} onMouseDown={(e) => e.preventDefault()}>
-                      <Check className="h-4 w-4" />
-                    </Button>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/20 shrink-0">
+                    <ListTodo className="w-5 h-5 text-white" />
                   </div>
-                ) : (
-                  <h1
-                    className="text-2xl font-bold cursor-pointer hover:underline decoration-dashed underline-offset-4 decoration-muted-foreground/50 truncate"
-                    onDoubleClick={() => page.can_edit && setIsEditingTitle(true)}
-                    title={t('page.edit_title_hint')}
-                    data-cy="page-title"
-                  >
-                    {page.title}
-                  </h1>
-                )}
+
+                  {isEditingTitle ? (
+                    <div className="flex items-center gap-2 flex-1 max-w-lg">
+                      <Input
+                        value={editPageTitle}
+                        onChange={(e) => setEditPageTitle(e.target.value)}
+                        onKeyDown={handleKeyDownTitle}
+                        onBlur={handleUpdatePageTitle}
+                        autoFocus
+                        className="text-xl font-bold h-10"
+                      />
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-10 w-10"
+                        onClick={handleUpdatePageTitle}
+                        onMouseDown={(e) => e.preventDefault()}
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <h1
+                      className="text-xl sm:text-2xl font-bold cursor-pointer hover:text-violet-600 transition-colors truncate max-w-md"
+                      onDoubleClick={() => page.can_edit && setIsEditingTitle(true)}
+                      title={page.can_edit ? t('page.edit_title_hint') : page.title}
+                    >
+                      {page.title}
+                    </h1>
+                  )}
+                </div>
               </div>
 
-              <div className="pl-0 md:pl-12">
+              <div className="pl-[52px] sm:pl-[76px]">
                 {isEditingDesc ? (
                   <div className="flex items-start gap-2 max-w-lg">
                     <Textarea
@@ -368,25 +364,39 @@ export const PageView: React.FC = () => {
                       placeholder={t('page.add_desc_placeholder')}
                       className="min-h-[60px]"
                     />
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleUpdatePageDescription} onMouseDown={(e) => e.preventDefault()}>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
+                      onClick={handleUpdatePageDescription}
+                      onMouseDown={(e) => e.preventDefault()}
+                    >
                       <Check className="h-4 w-4" />
                     </Button>
                   </div>
                 ) : (
                   <p
-                    className="text-muted-foreground cursor-pointer hover:text-foreground transition-colors max-w-3xl"
+                    className="text-slate-500 dark:text-slate-400 cursor-pointer hover:text-slate-700 dark:hover:text-slate-300 transition-colors max-w-2xl text-sm"
                     onDoubleClick={() => page.can_edit && setIsEditingDesc(true)}
                     title={page.can_edit ? t('page.edit_desc_hint') : ''}
                   >
-                    {page.description || (page.can_edit ? <span className="italic opacity-50">{t('page.add_desc_placeholder')}</span> : '')}
+                    {page.description || (
+                      page.can_edit ? (
+                        <span className="italic opacity-50">{t('page.add_desc_placeholder')}</span>
+                      ) : null
+                    )}
                   </p>
                 )}
 
                 <div className="mt-2 flex items-center gap-2">
                   {page.is_creator ? (
-                    <Badge variant="default">{t('page.role_creator')}</Badge>
+                    <Badge className="bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 hover:bg-violet-100">
+                      {t('page.role_creator')}
+                    </Badge>
                   ) : page.can_edit ? (
-                    <Badge variant="secondary" className="bg-green-100 text-green-800 hover:bg-green-100">{t('page.role_editor')}</Badge>
+                    <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-100">
+                      {t('page.role_editor')}
+                    </Badge>
                   ) : (
                     <Badge variant="outline">{t('page.role_viewer')}</Badge>
                   )}
@@ -394,14 +404,14 @@ export const PageView: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               {page.is_creator && (
-                <div className="flex gap-2">
+                <>
                   <ShareDialog page={page} />
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="sm" className="gap-2" data-cy="delete-page-btn">
-                        <Trash2 className="w-4 h-4 mr-1" />
+                      <Button variant="destructive" size="sm" className="gap-2">
+                        <Trash2 className="w-4 h-4" />
                         <span className="hidden sm:inline">{t('page.delete_page')}</span>
                       </Button>
                     </AlertDialogTrigger>
@@ -416,47 +426,47 @@ export const PageView: React.FC = () => {
                         <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
                         <AlertDialogAction
                           onClick={handleDeletePage}
-                          variant="destructive"
-                          data-cy="confirm-delete-page-btn"
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         >
                           {t('common.delete')}
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
-                </div>
+                </>
               )}
-
               <UserMenu />
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Lists */}
-      <div className="flex-1 overflow-hidden min-h-0">
-        {/* Scroll area: vertical on small screens, horizontal on md+ */}
-        <div className="h-full overflow-y-auto p-4 md:overflow-x-auto md:p-6">
+      <main className="flex-1 overflow-hidden min-h-0">
+        <div className="h-full overflow-x-auto overflow-y-auto p-4 sm:p-6">
           <DndContext onDragEnd={handleListsDragEnd} collisionDetection={closestCenter}>
-            <SortableContext items={lists.map(l => l.id)} strategy={rectSortingStrategy}>
-              <div className="grid grid-cols-1 md:grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-4 md:gap-6 items-start lg:flex lg:flex-row lg:items-start lg:gap-6 lg:overflow-x-auto lg:py-2">
+            <SortableContext items={lists.map((l) => l.id)} strategy={horizontalListSortingStrategy}>
+              <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-start pb-4">
                 {isListsLoading ? (
                   <div className="flex gap-4">
-                    {[1, 2, 3].map(i => (
-                      <div key={i} className="w-[300px] h-[200px] bg-muted/50 rounded-xl animate-pulse" />
+                    {[1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        className="w-full lg:w-[320px] h-[200px] bg-slate-100 dark:bg-slate-800 rounded-xl animate-pulse"
+                      />
                     ))}
                   </div>
                 ) : (
-                  lists.map((list) => (
-                    <SortableListItem key={list.id} list={list} />
-                  ))
+                  lists.map((list) => <SortableListItem key={list.id} list={list} />)
                 )}
 
-                {/* Add List */}
+                {/* Add List Card */}
                 {page.can_edit && (
-                  <Card className="w-full lg:w-[300px] lg:flex-shrink-0 bg-muted/30 border-dashed border-2 shadow-none hover:bg-muted/50 transition-colors">
-                    <CardContent className="p-4 pt-4">
-                      <h3 className="font-semibold text-lg mb-3">{t('page.new_list')}</h3>
+                  <Card className="w-full lg:w-[320px] lg:flex-shrink-0 bg-slate-50/50 dark:bg-slate-800/30 border-dashed border-2 border-slate-200 dark:border-slate-700 shadow-none hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors">
+                    <CardContent className="p-4">
+                      <h3 className="font-semibold text-base mb-3 text-slate-700 dark:text-slate-300">
+                        {t('page.new_list')}
+                      </h3>
                       <div className="flex gap-2">
                         <Input
                           value={newListTitle}
@@ -464,17 +474,19 @@ export const PageView: React.FC = () => {
                           onKeyDown={handleKeyDownNewList}
                           placeholder={t('page.new_list_placeholder')}
                           disabled={addListMutation.isPending}
-                          className="bg-background"
-                          data-cy="create-list-input"
+                          className="bg-white dark:bg-slate-800"
                         />
                         <Button
                           size="icon"
                           onClick={handleAddList}
                           disabled={addListMutation.isPending || !newListTitle.trim()}
-                          className="flex-shrink-0"
-                          data-cy="create-list-btn"
+                          className="shrink-0 bg-violet-500 hover:bg-violet-600"
                         >
-                          {addListMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                          {addListMutation.isPending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Plus className="w-4 h-4" />
+                          )}
                         </Button>
                       </div>
                     </CardContent>
@@ -484,7 +496,7 @@ export const PageView: React.FC = () => {
             </SortableContext>
           </DndContext>
         </div>
-      </div>
+      </main>
     </div>
   );
-};
+}

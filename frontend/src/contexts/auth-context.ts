@@ -1,4 +1,3 @@
-// Auth context types and value (kept separate from component files to enable fast refresh)
 import { createContext } from 'react';
 import type { User } from '../types';
 
@@ -9,8 +8,7 @@ export interface AuthContextType {
   logout: () => void;
   isAuthenticated: boolean;
   isLoading: boolean;
-  refreshUser?: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
-AuthContext.displayName = 'AuthContext';

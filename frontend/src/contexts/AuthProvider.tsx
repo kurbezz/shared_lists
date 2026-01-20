@@ -1,16 +1,12 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import type { ReactNode } from 'react';
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import type { User } from '../types';
-
-import { AuthContext } from './authContext.types';
-import type { AuthContextType } from './authContext.types';
-
+import { AuthContext, type AuthContextType } from './auth-context';
 
 interface AuthProviderProps {
   children: ReactNode;
 }
 
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+export function AuthProvider({ children }: AuthProviderProps) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('auth_token'));
   const [user, setUser] = useState<User | null>(() => {
     const storedToken = localStorage.getItem('auth_token');
@@ -31,22 +27,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
     return null;
   });
-  const isLoading = false;
+  const [isLoading] = useState(false);
 
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
     try {
-      // dynamic import to avoid circular dependency issues
       const { apiClient } = await import('../api/client');
       const data = await apiClient.getCurrentUser();
       setUser(data);
     } catch (e) {
       console.error('Failed to refresh user:', e);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    // Already initialized from localStorage in useState initializers
-    // This effect is now empty or can be removed if not needed for anything else.
+    if (token && user) {
+      refreshUser();
+    }
   }, []);
 
   const login = useCallback((newToken: string) => {
@@ -66,7 +62,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.error('Failed to decode token:', error);
     }
 
-    // try to refresh full user info after login
     (async () => {
       try {
         await refreshUser();
@@ -74,7 +69,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // ignore
       }
     })();
-  }, []);
+  }, [refreshUser]);
 
   const logout = useCallback(() => {
     localStorage.removeItem('auth_token');
@@ -90,7 +85,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isAuthenticated: !!token,
     isLoading,
     refreshUser,
-  }), [user, token, login, logout, isLoading]);
+  }), [user, token, login, logout, isLoading, refreshUser]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
+}

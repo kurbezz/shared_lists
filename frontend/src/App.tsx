@@ -1,17 +1,31 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AuthProvider } from '@/contexts/AuthProvider';
-import { useAuth } from '@/hooks/useAuth';
-import { Toaster } from '@/components/ui/sonner';
-import { Login } from '@/pages/Login';
-import { AuthCallback } from '@/pages/AuthCallback';
-import { Dashboard } from '@/pages/Dashboard';
-import { PageView } from '@/pages/PageView';
-import { PublicPageView } from '@/pages/PublicPageView';
-import { Profile } from '@/pages/Profile';
-import { Loader2 } from 'lucide-react';
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AuthProvider } from "@/contexts/AuthProvider";
+import { useAuth } from "@/hooks/useAuth";
+import { Toaster } from "@/components/ui/sonner";
+import { lazy, Suspense } from "react";
+import { Loader2 } from "lucide-react";
 
-import './i18n';
+const Login = lazy(() =>
+  import("@/pages/Login").then((m) => ({ default: m.Login })),
+);
+const AuthCallback = lazy(() =>
+  import("@/pages/AuthCallback").then((m) => ({ default: m.AuthCallback })),
+);
+const Dashboard = lazy(() =>
+  import("@/pages/Dashboard").then((m) => ({ default: m.Dashboard })),
+);
+const PageView = lazy(() =>
+  import("@/pages/PageView").then((m) => ({ default: m.PageView })),
+);
+const PublicPageView = lazy(() =>
+  import("@/pages/PublicPageView").then((m) => ({ default: m.PublicPageView })),
+);
+const Profile = lazy(() =>
+  import("@/pages/Profile").then((m) => ({ default: m.Profile })),
+);
+
+import "./i18n";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -97,7 +111,9 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
-          <AppRoutes />
+          <Suspense fallback={<LoadingScreen />}>
+            <AppRoutes />
+          </Suspense>
           <Toaster position="top-right" richColors />
         </AuthProvider>
       </BrowserRouter>

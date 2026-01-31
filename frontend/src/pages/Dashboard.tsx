@@ -1,35 +1,26 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useTranslation } from 'react-i18next';
-import { apiClient } from '@/api/client';
-import { useAuth } from '@/hooks/useAuth';
-import { UserMenu } from '@/components/UserMenu';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, lazy, Suspense } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+import { apiClient } from "@/api/client";
+import { useAuth } from "@/hooks/useAuth";
+import { UserMenu } from "@/components/UserMenu";
+import { Button } from "@/components/ui/button";
+
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { toast } from 'sonner';
-import { Plus, Trash2, Loader2, ArrowRight, ListTodo } from 'lucide-react';
+  Card,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+const CreatePageDialog = lazy(() => import("@/components/CreatePageDialog"));
+
+const DeleteConfirmDialog = lazy(
+  () => import("@/components/DeleteConfirmDialog"),
+);
+import { toast } from "sonner";
+import { Plus, Trash2, Loader2, ArrowRight, ListTodo } from "lucide-react";
 
 export function Dashboard() {
   const { t, i18n } = useTranslation();
@@ -38,37 +29,38 @@ export function Dashboard() {
   const queryClient = useQueryClient();
 
   const { data: pages = [], isLoading } = useQuery({
-    queryKey: ['pages'],
+    queryKey: ["pages"],
     queryFn: () => apiClient.getPages(),
   });
 
   const createPageMutation = useMutation({
-    mutationFn: (data: { title: string; description?: string }) => apiClient.createPage(data),
+    mutationFn: (data: { title: string; description?: string }) =>
+      apiClient.createPage(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['pages'] });
+      queryClient.invalidateQueries({ queryKey: ["pages"] });
       setIsCreateOpen(false);
-      setNewPageTitle('');
-      setNewPageDesc('');
+      setNewPageTitle("");
+      setNewPageDesc("");
     },
     onError: () => {
-      toast.error(t('dashboard.create_error'));
+      toast.error(t("dashboard.create_error"));
     },
   });
 
   const deletePageMutation = useMutation({
     mutationFn: (pageId: string) => apiClient.deletePage(pageId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['pages'] });
+      queryClient.invalidateQueries({ queryKey: ["pages"] });
       setPageToDelete(null);
     },
     onError: () => {
-      toast.error(t('dashboard.delete_error'));
+      toast.error(t("dashboard.delete_error"));
     },
   });
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [newPageTitle, setNewPageTitle] = useState('');
-  const [newPageDesc, setNewPageDesc] = useState('');
+  const [newPageTitle, setNewPageTitle] = useState("");
+  const [newPageDesc, setNewPageDesc] = useState("");
   const [pageToDelete, setPageToDelete] = useState<string | null>(null);
 
   const handleCreatePage = () => {
@@ -99,11 +91,13 @@ export function Dashboard() {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-slate-900 dark:text-white">
-                  {t('dashboard.title')}
+                  {t("dashboard.title")}
                 </h1>
                 {user && (
                   <p className="text-sm text-slate-500 dark:text-slate-400">
-                    {t('dashboard.welcome', { name: user.display_name || user.username })}
+                    {t("dashboard.welcome", {
+                      name: user.display_name || user.username,
+                    })}
                   </p>
                 )}
               </div>
@@ -122,7 +116,7 @@ export function Dashboard() {
               className="gap-2 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 shadow-lg shadow-violet-500/20"
             >
               <Plus className="w-4 h-4" />
-              {t('dashboard.create_page')}
+              {t("dashboard.create_page")}
             </Button>
           </div>
         )}
@@ -137,7 +131,7 @@ export function Dashboard() {
             {createdPages.length > 0 && (
               <section className="space-y-4">
                 <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                  {t('dashboard.my_pages', { count: createdPages.length })}
+                  {t("dashboard.my_pages", { count: createdPages.length })}
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {createdPages.map((page) => (
@@ -151,11 +145,15 @@ export function Dashboard() {
                           {page.title}
                         </CardTitle>
                         <CardDescription className="line-clamp-2 min-h-[2.5em]">
-                          {page.description || t('dashboard.no_description')}
+                          {page.description || t("dashboard.no_description")}
                         </CardDescription>
                       </CardHeader>
                       <CardFooter className="flex justify-between items-center text-xs text-slate-500 pt-4">
-                        <span>{new Date(page.created_at).toLocaleDateString(i18n.language)}</span>
+                        <span>
+                          {new Date(page.created_at).toLocaleDateString(
+                            i18n.language,
+                          )}
+                        </span>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -178,7 +176,7 @@ export function Dashboard() {
             {sharedPages.length > 0 && (
               <section className="space-y-4">
                 <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                  {t('dashboard.shared_with_me', { count: sharedPages.length })}
+                  {t("dashboard.shared_with_me", { count: sharedPages.length })}
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {sharedPages.map((page) => (
@@ -195,19 +193,25 @@ export function Dashboard() {
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-semibold shrink-0 ${
                               page.can_edit
-                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                                : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
+                                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                : "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400"
                             }`}
                           >
-                            {page.can_edit ? t('dashboard.role_editor') : t('dashboard.role_viewer')}
+                            {page.can_edit
+                              ? t("dashboard.role_editor")
+                              : t("dashboard.role_viewer")}
                           </span>
                         </div>
                         <CardDescription className="line-clamp-2 min-h-[2.5em]">
-                          {page.description || t('dashboard.no_description')}
+                          {page.description || t("dashboard.no_description")}
                         </CardDescription>
                       </CardHeader>
                       <CardFooter className="flex justify-between items-center text-xs text-slate-500 pt-4">
-                        <span>{new Date(page.created_at).toLocaleDateString(i18n.language)}</span>
+                        <span>
+                          {new Date(page.created_at).toLocaleDateString(
+                            i18n.language,
+                          )}
+                        </span>
                         <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-violet-500" />
                       </CardFooter>
                     </Card>
@@ -223,10 +227,10 @@ export function Dashboard() {
                   <Plus className="h-12 w-12 text-violet-500" />
                 </div>
                 <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
-                  {t('dashboard.no_pages')}
+                  {t("dashboard.no_pages")}
                 </h3>
                 <p className="text-slate-500 dark:text-slate-400 mb-8 max-w-sm text-center">
-                  {t('dashboard.no_pages_description')}
+                  {t("dashboard.no_pages_description")}
                 </p>
                 <Button
                   onClick={() => setIsCreateOpen(true)}
@@ -234,7 +238,7 @@ export function Dashboard() {
                   className="gap-2 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 shadow-lg shadow-violet-500/20"
                 >
                   <Plus className="w-5 h-5" />
-                  {t('dashboard.create_page')}
+                  {t("dashboard.create_page")}
                 </Button>
               </div>
             )}
@@ -242,79 +246,34 @@ export function Dashboard() {
         )}
       </main>
 
-      {/* Delete Confirmation */}
-      <AlertDialog open={!!pageToDelete} onOpenChange={(open) => !open && setPageToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('dashboard.delete_confirm_title')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('dashboard.delete_confirm_description')}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeletePage}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {t('common.delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {pageToDelete && (
+        <Suspense fallback={<div />}>
+          <DeleteConfirmDialog
+            open={!!pageToDelete}
+            onOpenChange={(open) => !open && setPageToDelete(null)}
+            onConfirm={handleDeletePage}
+            title={t("dashboard.delete_confirm_title")}
+            description={t("dashboard.delete_confirm_description")}
+            confirmText={t("common.delete")}
+            cancelText={t("common.cancel")}
+          />
+        </Suspense>
+      )}
 
-      {/* Create Page Dialog */}
-      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>{t('dashboard.new_page_title')}</DialogTitle>
-            <DialogDescription>{t('dashboard.new_page_description')}</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="title">{t('dashboard.label_title')}</Label>
-              <Input
-                id="title"
-                value={newPageTitle}
-                onChange={(e) => setNewPageTitle(e.target.value)}
-                placeholder={t('dashboard.placeholder_title')}
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleCreatePage();
-                }}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="desc">{t('dashboard.label_description')}</Label>
-              <Textarea
-                id="desc"
-                value={newPageDesc}
-                onChange={(e) => setNewPageDesc(e.target.value)}
-                placeholder={t('dashboard.placeholder_description')}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleCreatePage();
-                  }
-                }}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
-              {t('common.cancel')}
-            </Button>
-            <Button
-              onClick={handleCreatePage}
-              disabled={!newPageTitle.trim() || createPageMutation.isPending}
-              className="bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700"
-            >
-              {createPageMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {t('common.add')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <Suspense fallback={<div />}>
+        <CreatePageDialog
+          open={isCreateOpen}
+          onOpenChange={setIsCreateOpen}
+          newPageTitle={newPageTitle}
+          setNewPageTitle={setNewPageTitle}
+          newPageDesc={newPageDesc}
+          setNewPageDesc={setNewPageDesc}
+          onCreate={handleCreatePage}
+          isPending={createPageMutation.isPending}
+          cancelText={t("common.cancel")}
+          submitText={t("common.add")}
+        />
+      </Suspense>
     </div>
   );
 }

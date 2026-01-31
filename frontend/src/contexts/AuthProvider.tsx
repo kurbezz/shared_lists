@@ -41,10 +41,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         : "";
     const isAuthPage = pathname === "/login" || pathname.startsWith("/auth");
     if (isAuthPage) {
-      // Explicitly mark as not-authenticated while on auth pages so other code
-      // doesn't repeatedly try to refresh the user. Schedule the update asynchronously
-      // to avoid calling setState synchronously inside an effect (which can trigger cascading renders).
-      Promise.resolve().then(() => setUser(null));
+      // Do nothing: auth-related pages will handle the flow themselves (AuthCallback calls getCurrentUser()).
       return;
     }
 
@@ -54,15 +51,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [refreshUser]);
 
   // login no longer accepts token; backend sets cookie during OAuth flow. Provide a no-op login to satisfy callers.
-  const login = useCallback(() => {
-    // no-op: token is set via httpOnly cookie by backend
-    (async () => {
-      try {
-        await refreshUser();
-      } catch {
-        // ignore
-      }
-    })();
+  // Return a Promise so callers (e.g. AuthCallback) can await refreshUser and ensure the context is populated.
+  const login = useCallback(async () => {
+    try {
+      await refreshUser();
+    } catch {
+      // ignore
+    }
   }, [refreshUser]);
 
   const logout = useCallback(async () => {

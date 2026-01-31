@@ -19,12 +19,48 @@ import type {
   ApiKey,
   CreateApiKeyResponse,
   UpdateUser,
-} from '../types';
+} from "../types";
 
 const getApiBaseUrl = (): string => {
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
+  // Prefer an explicit VITE_API_URL when set, but guard against accidental
+  // build-time defaults that point at localhost in production builds.
+  const envUrl = import.meta.env.VITE_API_URL as string | undefined;
+
+  if (envUrl) {
+    try {
+      const parsed = new URL(envUrl);
+      const hostname = parsed.hostname.toLowerCase();
+
+      const isLocalhost =
+        hostname === "localhost" ||
+        hostname === "127.0.0.1" ||
+        hostname === "::1";
+
+      // Allow localhost when in development, but ignore it in production to avoid
+      // accidentally pointing production clients at a developer backend.
+      if (!(isLocalhost && import.meta.env.MODE === "production")) {
+        return envUrl;
+      }
+
+      // In DEV mode, log a warning so developers see what's happening.
+      if (import.meta.env.DEV) {
+        console.warn(
+          `VITE_API_URL='${envUrl}' looks like a localhost address and will be ignored in production builds. Falling back to window.location.origin + '/api'.`,
+        );
+      }
+    } catch {
+      // If env var is a relative path (like '/api'), allow it.
+      if (envUrl.startsWith("/")) {
+        return envUrl;
+      }
+      if (import.meta.env.DEV) {
+        console.warn(
+          `VITE_API_URL='${envUrl}' is not a valid URL. Falling back to window.location.origin + '/api'.`,
+        );
+      }
+    }
   }
+
   return `${window.location.origin}/api`;
 };
 
@@ -33,7 +69,7 @@ const API_BASE_URL = getApiBaseUrl();
 class ApiClient {
   private async request<T>(
     path: string,
-    options: RequestInit & { params?: Record<string, string> } = {}
+    options: RequestInit & { params?: Record<string, string> } = {},
   ): Promise<T> {
     const url = new URL(`${API_BASE_URL}${path}`);
     if (options.params) {
@@ -43,38 +79,51 @@ class ApiClient {
     }
 
     const headers = new Headers(options.headers);
-    if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
-      headers.set('Content-Type', 'application/json');
+    if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
+      headers.set("Content-Type", "application/json");
     }
 
     // Use credentials to send httpOnly cookie (auth_token) if present
     const response = await fetch(url.toString(), {
       ...options,
       headers,
-      credentials: 'include',
+      credentials: "include",
     });
 
     if (response.status === 401) {
       // In cookie-based auth flow we don't store the token client-side; ensure any remnant is removed.
-      try { localStorage.removeItem('auth_token'); } catch { /* ignore */ }
-      window.location.href = '/login';
-      throw new Error('Unauthorized');
+      try {
+        localStorage.removeItem("auth_token");
+      } catch {
+        /* ignore */
+      }
+      window.location.href = "/login";
+      throw new Error("Unauthorized");
     }
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({} as Record<string, unknown>));
+      const errorData = await response
+        .json()
+        .catch(() => ({}) as Record<string, unknown>);
 
       const getErrorMessageFromData = (d: Record<string, unknown> | null) => {
         if (!d) return undefined;
-        const maybeError = d['error'];
-        if (typeof maybeError === 'string') return maybeError;
-        const maybeMessage = d['message'];
-        if (typeof maybeMessage === 'string') return maybeMessage;
+        const maybeError = d["error"];
+        if (typeof maybeError === "string") return maybeError;
+        const maybeMessage = d["message"];
+        if (typeof maybeMessage === "string") return maybeMessage;
         return undefined;
       };
 
-      const msg = getErrorMessageFromData(errorData) || response.statusText || `HTTP error! status: ${response.status}`;
-      console.error('API error response', { url: url.toString(), status: response.status, body: errorData });
+      const msg =
+        getErrorMessageFromData(errorData) ||
+        response.statusText ||
+        `HTTP error! status: ${response.status}`;
+      console.error("API error response", {
+        url: url.toString(),
+        status: response.status,
+        body: errorData,
+      });
       throw new Error(msg);
     }
 
@@ -98,7 +147,7 @@ class ApiClient {
 
   // Users
   async searchUsers(query: string): Promise<User[]> {
-    return this.request<User[]>('/users/search', {
+    return this.request<User[]>("/users/search", {
       params: { q: query },
     });
   }
@@ -109,7 +158,7 @@ class ApiClient {
 
   async updateCurrentUser(data: UpdateUser): Promise<User> {
     return this.request<User>(`/users/me`, {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify(data),
     });
   }
@@ -119,28 +168,31 @@ class ApiClient {
     return this.request<ApiKey[]>(`/settings/api-keys`);
   }
 
-  async createApiKey(data: { name?: string | null; scopes: string[] }): Promise<CreateApiKeyResponse> {
+  async createApiKey(data: {
+    name?: string | null;
+    scopes: string[];
+  }): Promise<CreateApiKeyResponse> {
     return this.request<CreateApiKeyResponse>(`/settings/api-keys`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(data),
     });
   }
 
   async revokeApiKey(id: string): Promise<void> {
     await this.request(`/settings/api-keys/${id}`, {
-      method: 'DELETE',
+      method: "DELETE",
     });
   }
 
   async deleteApiKey(id: string): Promise<void> {
     await this.request(`/settings/api-keys/${id}?hard=true`, {
-      method: 'DELETE',
+      method: "DELETE",
     });
   }
 
   // Pages
   async getPages(): Promise<PageWithPermission[]> {
-    return this.request<PageWithPermission[]>('/pages');
+    return this.request<PageWithPermission[]>("/pages");
   }
 
   async getPage(pageId: string): Promise<PageWithPermission> {
@@ -148,54 +200,62 @@ class ApiClient {
   }
 
   async createPage(data: CreatePage): Promise<Page> {
-    return this.request<Page>('/pages', {
-      method: 'POST',
+    return this.request<Page>("/pages", {
+      method: "POST",
       body: JSON.stringify(data),
     });
   }
 
   async updatePage(pageId: string, data: UpdatePage): Promise<Page> {
     return this.request<Page>(`/pages/${pageId}`, {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify(data),
     });
   }
 
   async deletePage(pageId: string): Promise<void> {
     await this.request(`/pages/${pageId}`, {
-      method: 'DELETE',
+      method: "DELETE",
     });
   }
 
   // Page permissions
   async getPagePermissions(pageId: string): Promise<PagePermissionWithUser[]> {
-    return this.request<PagePermissionWithUser[]>(`/pages/${pageId}/permissions`);
+    return this.request<PagePermissionWithUser[]>(
+      `/pages/${pageId}/permissions`,
+    );
   }
 
-  async grantPermission(pageId: string, data: GrantPermission): Promise<PagePermissionWithUser> {
-    return this.request<PagePermissionWithUser>(`/pages/${pageId}/permissions`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  async grantPermission(
+    pageId: string,
+    data: GrantPermission,
+  ): Promise<PagePermissionWithUser> {
+    return this.request<PagePermissionWithUser>(
+      `/pages/${pageId}/permissions`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+    );
   }
 
   async updatePermission(
     pageId: string,
     permissionId: string,
-    data: UpdatePermission
+    data: UpdatePermission,
   ): Promise<PagePermissionWithUser> {
     return this.request<PagePermissionWithUser>(
       `/pages/${pageId}/permissions/${permissionId}`,
       {
-        method: 'PATCH',
+        method: "PATCH",
         body: JSON.stringify(data),
-      }
+      },
     );
   }
 
   async revokePermission(pageId: string, permissionId: string): Promise<void> {
     await this.request(`/pages/${pageId}/permissions/${permissionId}`, {
-      method: 'DELETE',
+      method: "DELETE",
     });
   }
 
@@ -210,21 +270,25 @@ class ApiClient {
 
   async createList(pageId: string, data: CreateList): Promise<List> {
     return this.request<List>(`/pages/${pageId}/lists`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(data),
     });
   }
 
-  async updateList(pageId: string, listId: string, data: UpdateList): Promise<List> {
+  async updateList(
+    pageId: string,
+    listId: string,
+    data: UpdateList,
+  ): Promise<List> {
     return this.request<List>(`/pages/${pageId}/lists/${listId}`, {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify(data),
     });
   }
 
   async deleteList(pageId: string, listId: string): Promise<void> {
     await this.request(`/pages/${pageId}/lists/${listId}`, {
-      method: 'DELETE',
+      method: "DELETE",
     });
   }
 
@@ -237,30 +301,37 @@ class ApiClient {
     return this.request<ListItem>(`/lists/${listId}/items/${itemId}`);
   }
 
-  async createListItem(listId: string, data: CreateListItem): Promise<ListItem> {
+  async createListItem(
+    listId: string,
+    data: CreateListItem,
+  ): Promise<ListItem> {
     return this.request<ListItem>(`/lists/${listId}/items`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(data),
     });
   }
 
-  async updateListItem(listId: string, itemId: string, data: UpdateListItem): Promise<ListItem> {
+  async updateListItem(
+    listId: string,
+    itemId: string,
+    data: UpdateListItem,
+  ): Promise<ListItem> {
     return this.request<ListItem>(`/lists/${listId}/items/${itemId}`, {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify(data),
     });
   }
 
   async deleteListItem(listId: string, itemId: string): Promise<void> {
     await this.request(`/lists/${listId}/items/${itemId}`, {
-      method: 'DELETE',
+      method: "DELETE",
     });
   }
 
   // Public link methods
   async setPublicSlug(pageId: string, data: SetPublicSlug): Promise<Page> {
     return this.request<Page>(`/pages/${pageId}/public-slug`, {
-      method: 'PUT',
+      method: "PUT",
       body: JSON.stringify(data),
     });
   }

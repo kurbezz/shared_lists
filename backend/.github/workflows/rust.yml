@@ -2,9 +2,15 @@ name: Rust CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
+    paths:
+      - "backend/**"
+      - ".github/workflows/rust.yml"
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
+    paths:
+      - "backend/**"
+      - ".github/workflows/rust.yml"
 
 jobs:
   test:

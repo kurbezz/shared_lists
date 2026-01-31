@@ -24,6 +24,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setIsLoading(true);
     try {
       const data = await apiClient.getCurrentUser();
+
+      // Handle empty responses explicitly so we don't log misleading messages like
+      // "[Auth] refreshUser: got user undefined".
+      if (!data) {
+        console.debug("[Auth] refreshUser: no user returned from API");
+        setUser(null);
+        return;
+      }
+
       console.debug("[Auth] refreshUser: got user", data);
       setUser(data);
     } catch (e) {
@@ -57,15 +66,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
     })();
   }, [refreshUser]);
 
-  // login no longer accepts token; backend sets cookie during OAuth flow. Provide a no-op login to satisfy callers.
-  // Return a Promise so callers (e.g. AuthCallback) can await refreshUser and ensure the context is populated.
+  // login no longer accepts token; backend sets cookie during OAuth flow.
+  // Previously this was a no-op that swallowed errors. Perform an explicit call to the backend
+  // so callers (e.g. AuthCallback) receive failures and can react (for example, navigate back to /login).
   const login = useCallback(async () => {
+    setIsLoading(true);
     try {
-      await refreshUser();
-    } catch {
-      // ignore
+      console.debug("[Auth] login: calling getCurrentUser()");
+      const data = await apiClient.getCurrentUser();
+      console.debug("[Auth] login: got user", data);
+      if (!data) {
+        setUser(null);
+        throw new Error("Login failed: no user returned from server");
+      }
+      setUser(data);
+    } finally {
+      setIsLoading(false);
     }
-  }, [refreshUser]);
+  }, []);
 
   const logout = useCallback(async () => {
     try {

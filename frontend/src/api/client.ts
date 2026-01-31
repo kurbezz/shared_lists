@@ -157,12 +157,42 @@ class ApiClient {
       return undefined as T;
     }
 
+    // Read the response body as text first so we can provide better diagnostics
+    const text = await response.text();
+    if (!text) return undefined as T;
+
     try {
-      const text = await response.text();
-      if (!text) return undefined as T;
       return JSON.parse(text) as T;
-    } catch {
-      return undefined as T;
+    } catch (parseErr) {
+      const contentType = response.headers.get("content-type") || "";
+      const snippet = text.length > 1024 ? `${text.slice(0, 1024)}...` : text;
+      const isHtml = contentType.includes("text/html") || /^\s*</.test(text);
+
+      // Surface detailed debug information to the console so it's easier to diagnose cases
+      // where the server unexpectedly returns HTML (e.g. index.html) or other non-JSON payloads.
+      console.error("API returned invalid JSON", {
+        url: url.toString(),
+        status: response.status,
+        contentType,
+        isHtml,
+        bodySnippet: snippet,
+        parseError: parseErr,
+      });
+
+      const err = new Error(
+        `Invalid JSON response from API (${response.status}) at ${url.toString()}`,
+      ) as Error & {
+        status?: number;
+        url?: string;
+        bodySnippet?: string;
+        isHtml?: boolean;
+      };
+      err.status = response.status;
+      err.url = url.toString();
+      err.bodySnippet = snippet;
+      err.isHtml = isHtml;
+
+      throw err;
     }
   }
 

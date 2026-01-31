@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.production
+.git/
+.gitignore
+*.md
+README.md
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+coverage/
+.cache/

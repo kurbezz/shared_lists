@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { parseValidationErrors, getValidationFromError } from '@/lib/validation';
+import * as formHelpers from '@/lib/formHelpers';
 
 // Hook to manage server-side validation errors.
 // - `errors` is a map of field -> message
@@ -45,35 +46,20 @@ export function useServerErrors() {
     const entries = Object.entries(errors);
     if (entries.length === 0) return;
 
-    // prefer setFieldMeta (FormApi) to attach errors
-    type SetFieldMetaFn = (field: string, updater: (meta?: unknown) => unknown) => void;
-    type SetErrorMapFn = (map: { fields?: Record<string, Array<{ message: string }>> } | Record<string, unknown>) => void;
+    // prefer setFieldMeta (FormApi) to attach errors; use centralized helpers
+    // to keep `any` casts confined to one place.
+    entries.forEach(([field, msg]) => {
+      // try setFieldMeta first
+      formHelpers.setFieldMetaSafe(form, field, (m: unknown) => ({ ...((m as Record<string, unknown>) || {}), errors: [msg] }));
+    });
 
-    const f = form as { setFieldMeta?: SetFieldMetaFn; setErrorMap?: SetErrorMapFn };
-    if (typeof f.setFieldMeta === 'function') {
-      entries.forEach(([field, msg]) => {
-        try {
-          f.setFieldMeta(field, (m: unknown) => ({ ...((m as Record<string, unknown>) || {}), errors: [msg] }));
-        } catch {
-          // ignore failures for unknown fields
-        }
-      });
-      return;
-    }
-
-    // final fallback: setErrorMap (form-core)
-    if (typeof f.setErrorMap === 'function') {
-      try {
-        // form.setErrorMap expects a complex shape; provide a simple fields map
-        const map: Record<string, unknown> = { fields: {} };
-        entries.forEach(([field, msg]) => {
-          map.fields[field] = [{ message: msg }];
-        });
-        f.setErrorMap(map);
-      } catch {
-        // ignore
-      }
-    }
+    // If the form exposes setErrorMap, set a simple fields map as a fallback
+    const map: Record<string, unknown> = { fields: {} };
+    entries.forEach(([field, msg]) => {
+      // fill map.fields
+      (map.fields as Record<string, unknown>)[field] = [{ message: msg }];
+    });
+    formHelpers.setErrorMapSafe(form, map);
   }, [errors]);
 
   return { errors, setFrom, setFromError, setErrors, clear, clearField, onChangeClear, applyToForm } as const;

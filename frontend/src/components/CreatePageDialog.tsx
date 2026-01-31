@@ -85,15 +85,21 @@ export default function CreatePageDialog({
       const res = schema.safeParse(value);
       if (!res.success) {
         // apply errors into form so user sees them
-        res.error.errors.forEach((issue) => {
-          const pathArr = (issue.path || []);
-          const field = pathArr.length > 0 ? (pathArr[0] as 'title' | 'description') : 'title';
-          try {
-            form.setFieldMeta(field, (m: unknown) => ({ ...((m as Record<string, unknown>) || {}), errors: [issue.message] }));
-          } catch {
-            // ignore
-          }
-        });
+          res.error.errors.forEach((issue) => {
+            const pathArr = (issue.path || []);
+            const field = pathArr.length > 0 ? (pathArr[0] as 'title' | 'description') : 'title';
+            try {
+              // TanStack form's setFieldMeta accepts an updater; keep the updater shape
+              // straightforward so different TanStack versions can handle it.
+              try {
+                form.setFieldMeta?.(field, (m: unknown) => ({ ...((m as Record<string, unknown>) || {}), errors: [issue.message] }));
+              } catch {
+                // ignore
+              }
+            } catch {
+              // ignore
+            }
+          });
       return;
     }
 

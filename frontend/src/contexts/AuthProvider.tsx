@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
+import { apiClient } from '../api/client';
 import type { User } from '../types';
 import { AuthContext, type AuthContextType } from './auth-context';
 
@@ -7,31 +8,13 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('auth_token'));
-  const [user, setUser] = useState<User | null>(() => {
-    const storedToken = localStorage.getItem('auth_token');
-    if (storedToken) {
-      try {
-        const payload = JSON.parse(atob(storedToken.split('.')[1]));
-        return {
-          id: payload.sub,
-          twitch_id: payload.twitch_id,
-          username: payload.username,
-          created_at: '',
-          updated_at: '',
-        };
-      } catch (error) {
-        console.error('Failed to decode stored token:', error);
-        localStorage.removeItem('auth_token');
-      }
-    }
-    return null;
-  });
+  // Token is no longer stored in localStorage (httpOnly cookie flow). Keep token state null.
+  const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [isLoading] = useState(false);
 
   const refreshUser = useCallback(async () => {
     try {
-      const { apiClient } = await import('../api/client');
       const data = await apiClient.getCurrentUser();
       setUser(data);
     } catch (e) {
@@ -39,29 +22,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, []);
 
+  // On mount, try to refresh user (backend will check cookie)
   useEffect(() => {
-    if (token && user) {
-      refreshUser();
-    }
-  }, []);
+    (async () => {
+      await refreshUser();
+    })();
+  }, [refreshUser]);
 
-  const login = useCallback((newToken: string) => {
-    localStorage.setItem('auth_token', newToken);
-    setToken(newToken);
-
-    try {
-      const payload = JSON.parse(atob(newToken.split('.')[1]));
-      setUser({
-        id: payload.sub,
-        twitch_id: payload.twitch_id,
-        username: payload.username,
-        created_at: '',
-        updated_at: '',
-      });
-    } catch (error) {
-      console.error('Failed to decode token:', error);
-    }
-
+  // login no longer accepts token; backend sets cookie during OAuth flow. Provide a no-op login to satisfy callers.
+  const login = useCallback(() => {
+    // no-op: token is set via httpOnly cookie by backend
     (async () => {
       try {
         await refreshUser();
@@ -71,8 +41,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     })();
   }, [refreshUser]);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem('auth_token');
+  const logout = useCallback(async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+    } catch {
+      // ignore
+    }
     setToken(null);
     setUser(null);
   }, []);

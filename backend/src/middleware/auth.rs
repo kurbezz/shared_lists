@@ -81,6 +81,28 @@ pub async fn auth_middleware(
         }
     }
 
+    // Also check cookie `auth_token` for JWT (httpOnly cookie flow)
+    if let Some(cookie_hdr) = request.headers().get("cookie").and_then(|h| h.to_str().ok()) {
+        // Parse cookies properly using the `cookie` crate to avoid brittle manual parsing.
+        // cookie::Cookie::parse will parse a single cookie string like "name=value"; browsers send
+        // multiple cookies in a single header separated by `; ` so try splitting and parsing each.
+        for pair in cookie_hdr.split(';') {
+            if let Ok(c) = cookie::Cookie::parse(pair.trim()) {
+                if c.name() == "auth_token" {
+                    let token = c.value();
+                    let mut claims = state
+                        .auth_service
+                        .verify_jwt(token)
+                        .map_err(|_| AuthError::InvalidToken)?;
+
+                    claims.scopes = None;
+                    request.extensions_mut().insert(claims);
+                    return Ok(next.run(request).await);
+                }
+            }
+        }
+    }
+
     Err(AuthError::MissingToken)
 }
 
@@ -268,4 +290,3 @@ mod tests {
         Ok(())
     }
 }
-

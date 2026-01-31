@@ -8,7 +8,7 @@ edition = "2021"
 axum = { version = "0.7", features = ["macros"] }
 tokio = { version = "1", features = ["full"] }
 tower = { version = "0.4", features = ["util"] }
-tower-http = { version = "0.5", features = ["cors", "trace"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "set-header"] }
 
 # Required for tests that call router oneshot
 hyper = "0.14"
@@ -41,5 +41,8 @@ hex = "0.4"
 # Environment
 config = "0.14"
 urlencoding = "2.1"
+url = "2"
+cookie = "0.16"
+http = "0.2"
 
 [dev-dependencies]

@@ -7,6 +7,8 @@ use axum::{
     routing::get,
     Router,
 };
+use cookie::{Cookie, time::Duration as CookieDuration};
+use axum::http::StatusCode;
 use serde::Deserialize;
 use std::sync::Arc;
 
@@ -31,6 +33,7 @@ pub fn auth_router(state: AuthRouterState) -> Router {
     Router::new()
         .route("/login", get(login))
         .route("/callback", get(callback))
+        .route("/logout", axum::routing::post(logout))
         .with_state(state)
 }
 
@@ -75,10 +78,42 @@ async fn callback(
         .create_jwt(&user)
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    // Redirect to frontend with token
-    let redirect_url = format!("{}/auth/callback?token={}", state.frontend_url, urlencoding::encode(&jwt));
+    // Set JWT as httpOnly secure cookie and redirect to frontend callback path without token in URL
 
-    Ok(Redirect::temporary(&redirect_url))
+    // Build cookie with proper attributes. For local development over http the `Secure` flag
+    // may prevent the cookie from being set; we keep it enabled here but consider toggling in dev.
+    let c = Cookie::build("auth_token", jwt)
+        .path("/")
+        .http_only(true)
+        .same_site(cookie::SameSite::Lax)
+        .max_age(CookieDuration::days(7))
+        .secure(true)
+        .finish();
+
+    let redirect_url = format!("{}/auth/callback", state.frontend_url);
+
+    let mut headers = axum::http::HeaderMap::new();
+    headers.insert(
+        axum::http::header::SET_COOKIE,
+        axum::http::HeaderValue::from_str(&c.to_string()).unwrap(),
+    );
+
+    Ok((headers, Redirect::temporary(&redirect_url)))
 }
 
+async fn logout() -> impl IntoResponse {
+    // Clear cookie by setting Max-Age=0
+    let c = Cookie::build("auth_token", "")
+        .path("/")
+        .http_only(true)
+        .max_age(CookieDuration::seconds(0))
+        .secure(true)
+        .finish();
 
+    let mut headers = axum::http::HeaderMap::new();
+    headers.insert(
+        axum::http::header::SET_COOKIE,
+        axum::http::HeaderValue::from_str(&c.to_string()).unwrap(),
+    );
+    (headers, StatusCode::NO_CONTENT)
+}

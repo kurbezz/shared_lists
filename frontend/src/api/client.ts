@@ -47,18 +47,16 @@ class ApiClient {
       headers.set('Content-Type', 'application/json');
     }
 
-    const token = localStorage.getItem('auth_token');
-    if (token) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
-
+    // Use credentials to send httpOnly cookie (auth_token) if present
     const response = await fetch(url.toString(), {
       ...options,
       headers,
+      credentials: 'include',
     });
 
     if (response.status === 401) {
-      localStorage.removeItem('auth_token');
+      // In cookie-based auth flow we don't store the token client-side; ensure any remnant is removed.
+      try { localStorage.removeItem('auth_token'); } catch { /* ignore */ }
       window.location.href = '/login';
       throw new Error('Unauthorized');
     }

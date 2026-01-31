@@ -21,7 +21,12 @@ use crate::services::{AuthService, ApiKeyService};
 use axum::{middleware as axum_middleware, Router};
 use sqlx::sqlite::SqlitePoolOptions;
 use std::sync::Arc;
+use axum::http::HeaderValue;
+use url::Url;
+use axum::http::Method;
+use axum::http::header::{AUTHORIZATION, ACCEPT, CONTENT_TYPE, STRICT_TRANSPORT_SECURITY, X_FRAME_OPTIONS, X_CONTENT_TYPE_OPTIONS, CONTENT_SECURITY_POLICY, REFERRER_POLICY};
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::set_header::SetResponseHeaderLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -38,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
     // Load configuration
     let config = Config::from_env()?;
     tracing::info!("Configuration loaded");
-    tracing::info!("Database URL: {}", config.database_url);
+    // Do not log sensitive configuration like full database URLs or secrets.
     tracing::info!("Redirect URI: {}", config.twitch_redirect_uri);
     tracing::info!("Frontend URL: {}", config.frontend_url);
 
@@ -69,11 +74,41 @@ async fn main() -> anyhow::Result<()> {
 
     let api_key_service = Arc::new(ApiKeyService::new((*api_key_repo).clone()));
 
-    // Setup CORS
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+    // Setup CORS — restrict allowed origin to the configured frontend URL when possible.
+    // Limit allowed methods and headers to reduce attack surface.
+    // If FRONTEND_URL is invalid, fall back to allowing any origin (with a warning).
+    // Parse frontend URL and extract origin (scheme://host[:port]).
+    // When a concrete origin is available, enable credentials so httpOnly cookies are sent by browsers.
+    let cors = match Url::parse(&config.frontend_url) {
+        Ok(parsed) => {
+            if let Some(host) = parsed.host_str() {
+                let origin = if let Some(port) = parsed.port() {
+                    format!("{}://{}:{}", parsed.scheme(), host, port)
+                } else {
+                    format!("{}://{}", parsed.scheme(), host)
+                };
+
+                match HeaderValue::from_str(&origin) {
+                    Ok(origin_hv) => CorsLayer::new()
+                        .allow_origin(origin_hv)
+                        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
+                        .allow_headers(vec![AUTHORIZATION, CONTENT_TYPE, ACCEPT])
+                        .allow_credentials(true),
+                    Err(_) => {
+                        tracing::warn!("Parsed frontend origin '{}' is not a valid header value — falling back to allow Any origin", origin);
+                        CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any)
+                    }
+                }
+            } else {
+                tracing::warn!("FRONTEND_URL '{}' does not contain a hostname — falling back to allow Any origin", config.frontend_url);
+                CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any)
+            }
+        }
+        Err(_) => {
+            tracing::warn!("FRONTEND_URL is not a valid URL: '{}' — falling back to allow Any origin", config.frontend_url);
+            CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any)
+        }
+    };
 
     // Auth routes (no auth middleware)
     let auth_routes = auth_router(AuthRouterState {
@@ -118,7 +153,19 @@ async fn main() -> anyhow::Result<()> {
         .nest("/api/auth", auth_routes)
         .nest("/api", public_routes)
         .nest("/api", protected_routes)
-        .layer(cors);
+        .layer(cors)
+        // Security response headers
+        .layer(SetResponseHeaderLayer::overriding(
+            STRICT_TRANSPORT_SECURITY,
+            HeaderValue::from_static("max-age=63072000; includeSubDomains; preload"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(X_FRAME_OPTIONS, HeaderValue::from_static("DENY")))
+        .layer(SetResponseHeaderLayer::overriding(X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff")))
+        .layer(SetResponseHeaderLayer::overriding(REFERRER_POLICY, HeaderValue::from_static("no-referrer")))
+        .layer(SetResponseHeaderLayer::overriding(
+            CONTENT_SECURITY_POLICY,
+            HeaderValue::from_static("default-src 'self'; script-src 'self'; object-src 'none'; img-src 'self' data:;"),
+        ));
 
     // Start server
     let listener = tokio::net::TcpListener::bind(&config.server_addr()).await?;

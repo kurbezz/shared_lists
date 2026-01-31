@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { apiClient } from '@/api/client';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
@@ -11,14 +12,15 @@ export function AuthCallback() {
   const { login } = useAuth();
 
   useEffect(() => {
-    const token = searchParams.get('token');
-    
-    if (token) {
-      login(token);
-      navigate('/', { replace: true });
-    } else {
-      navigate('/login', { replace: true });
-    }
+    // After OAuth redirect, backend has set httpOnly cookie. Call backend to get current user.
+    (async () => {
+      try {
+        await apiClient.getCurrentUser();
+        navigate('/', { replace: true });
+      } catch {
+        navigate('/login', { replace: true });
+      }
+    })();
   }, [searchParams, login, navigate]);
 
   return (

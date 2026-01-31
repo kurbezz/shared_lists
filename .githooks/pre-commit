@@ -34,6 +34,17 @@ if [ -d "frontend" ]; then
   fi
 fi
 
+# Frontend build: ensure the production build succeeds before committing
+if [ -d "frontend" ]; then
+  echo "
+--- Frontend: build ---"
+  # run the build script; this runs `tsc -b && vite build`
+  if ! npm --prefix frontend run build --silent; then
+    echo "\n❌ Frontend build failed. Fix build errors before committing."
+    exit 1
+  fi
+fi
+
 # All checks passed
 echo "\n✅ No warnings detected. Proceeding with commit."
 exit 0

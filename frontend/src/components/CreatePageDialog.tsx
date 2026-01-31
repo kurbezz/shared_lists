@@ -92,7 +92,11 @@ export default function CreatePageDialog({
               // TanStack form's setFieldMeta accepts an updater; keep the updater shape
               // straightforward so different TanStack versions can handle it.
               try {
-                form.setFieldMeta?.(field, (m: unknown) => ({ ...((m as Record<string, unknown>) || {}), errors: [issue.message] }));
+                // Allow a lenient call here — different TanStack form versions accept
+                // different meta shapes. Keep ESLint happy by disabling the explicit-any
+                // rule for this single call.
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (form.setFieldMeta as any)(field, (m: unknown) => ({ ...((m as Record<string, unknown>) || {}), errors: [issue.message] }));
               } catch {
                 // ignore
               }

@@ -11,6 +11,7 @@ use cookie::{Cookie, time::Duration as CookieDuration};
 use axum::http::StatusCode;
 use serde::Deserialize;
 use std::sync::Arc;
+use url::Url;
 
 #[derive(Clone)]
 pub struct AuthRouterState {
@@ -80,14 +81,19 @@ async fn callback(
 
     // Set JWT as httpOnly secure cookie and redirect to frontend callback path without token in URL
 
-    // Build cookie with proper attributes. For local development over http the `Secure` flag
-    // may prevent the cookie from being set; we keep it enabled here but consider toggling in dev.
+    // Build cookie with proper attributes. Determine Secure flag based on frontend URL scheme.
+    // For local development over http the `Secure` flag must be disabled so the cookie can be set.
+    let secure_flag = match Url::parse(&state.frontend_url) {
+        Ok(parsed) => parsed.scheme() == "https",
+        Err(_) => true,
+    };
+
     let c = Cookie::build("auth_token", jwt)
         .path("/")
         .http_only(true)
         .same_site(cookie::SameSite::Lax)
         .max_age(CookieDuration::days(7))
-        .secure(true)
+        .secure(secure_flag)
         .finish();
 
     let redirect_url = format!("{}/auth/callback", state.frontend_url);
@@ -101,13 +107,18 @@ async fn callback(
     Ok((headers, Redirect::temporary(&redirect_url)))
 }
 
-async fn logout() -> impl IntoResponse {
-    // Clear cookie by setting Max-Age=0
+async fn logout(State(state): State<AuthRouterState>) -> impl IntoResponse {
+    // Clear cookie by setting Max-Age=0. Respect frontend scheme to set Secure flag accordingly.
+    let secure_flag = match Url::parse(&state.frontend_url) {
+        Ok(parsed) => parsed.scheme() == "https",
+        Err(_) => true,
+    };
+
     let c = Cookie::build("auth_token", "")
         .path("/")
         .http_only(true)
         .max_age(CookieDuration::seconds(0))
-        .secure(true)
+        .secure(secure_flag)
         .finish();
 
     let mut headers = axum::http::HeaderMap::new();

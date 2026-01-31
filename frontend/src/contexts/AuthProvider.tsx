@@ -79,7 +79,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       token,
       login,
       logout,
-      isAuthenticated: !!token,
+      isAuthenticated: !!user,
       isLoading,
       refreshUser,
     }),

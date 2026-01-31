@@ -3,6 +3,8 @@ use crate::models::{
     Claims, CreateList, CreateListItem, List, ListItem, ListWithItems, UpdateList, UpdateListItem,
 };
 use crate::repositories::{ListRepository, PageRepository};
+use crate::validators::{validate_title, validate_item_content};
+use crate::error::FieldError;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -72,6 +74,22 @@ async fn create_list(
         return Err(AppError::Forbidden);
     }
 
+    // Validate title and aggregate errors
+    let mut errors: Vec<FieldError> = Vec::new();
+    let mut title_res = validate_title(&payload.title);
+    if let Err(crate::error::AppError::Validation(ref mut es)) = title_res {
+        errors.append(es);
+    } else if let Err(e) = title_res {
+        return Err(e);
+    }
+
+    if !errors.is_empty() {
+        return Err(crate::error::AppError::Validation(errors));
+    }
+
+    let mut payload = payload;
+    payload.title = title_res.unwrap();
+
     let list = state.list_repo.create_list(page_id, payload).await?;
 
     Ok(Json(list))
@@ -119,6 +137,12 @@ async fn update_list(
         .await?
     {
         return Err(AppError::Forbidden);
+    }
+
+    // Validate title if provided
+    let mut payload = payload;
+    if let Some(ref t) = payload.title {
+        payload.title = Some(validate_title(t)?);
     }
 
     let list = state
@@ -205,6 +229,11 @@ async fn create_item(
         return Err(AppError::Forbidden);
     }
 
+    // Validate content
+    let content = validate_item_content(&payload.content)?;
+    let mut payload = payload;
+    payload.content = content;
+
     let item = state.list_repo.create_item(list_id, payload).await?;
 
     Ok(Json(item))
@@ -264,6 +293,12 @@ async fn update_item(
         .await?
     {
         return Err(AppError::Forbidden);
+    }
+
+    // Validate content if provided
+    let mut payload = payload;
+    if let Some(ref c) = payload.content {
+        payload.content = Some(validate_item_content(c)?);
     }
 
     let item = state

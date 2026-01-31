@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { apiClient } from "@/api/client";
+import useServerErrors from '@/hooks/useServerErrors';
 import { useAuth } from "@/hooks/useAuth";
 import { UserMenu } from "@/components/UserMenu";
 import { Button } from "@/components/ui/button";
@@ -62,12 +63,27 @@ export function Dashboard() {
   const [newPageTitle, setNewPageTitle] = useState("");
   const [newPageDesc, setNewPageDesc] = useState("");
   const [pageToDelete, setPageToDelete] = useState<string | null>(null);
+  const serverErrors = useServerErrors();
+  const { errors: createErrors, setFromError: setCreateErrorsFromError, clear: clearCreateErrors, onChangeClear: onChangeClearCreate } = serverErrors;
 
   const handleCreatePage = () => {
     if (!newPageTitle.trim()) return;
+    clearCreateErrors();
     createPageMutation.mutate({
       title: newPageTitle.trim(),
       description: newPageDesc.trim() || undefined,
+    }, {
+        onError: (err: unknown) => {
+        if (err instanceof Error) {
+          // backend may attach a `validation` payload to errors
+          const maybe = err as unknown as { validation?: unknown };
+          if (maybe.validation) {
+            setCreateErrorsFromError(maybe.validation);
+            return;
+          }
+        }
+        toast.error(t("dashboard.create_error"));
+      }
     });
   };
 
@@ -270,6 +286,9 @@ export function Dashboard() {
           setNewPageDesc={setNewPageDesc}
           onCreate={handleCreatePage}
           isPending={createPageMutation.isPending}
+          errors={createErrors}
+          onChangeClear={onChangeClearCreate}
+          applyToForm={serverErrors.applyToForm}
           cancelText={t("common.cancel")}
           submitText={t("common.add")}
         />

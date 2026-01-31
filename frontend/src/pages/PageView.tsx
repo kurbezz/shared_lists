@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { List, PageWithPermission, UpdateList } from '@/types';
 import { apiClient } from '@/api/client';
+import useServerErrors from '@/hooks/useServerErrors';
 import { ListCard } from '@/components/ListCard';
 import { ShareDialog } from '@/components/ShareDialog';
 import { UserMenu } from '@/components/UserMenu';
@@ -40,6 +41,8 @@ export function PageView() {
   const [editPageTitle, setEditPageTitle] = useState('');
   const [isEditingDesc, setIsEditingDesc] = useState(false);
   const [editPageDesc, setEditPageDesc] = useState('');
+  const pageServerErrors = useServerErrors();
+  const { errors: pageErrors, setFrom: setPageErrorsFrom, clear: clearPageErrors, onChangeClear: onChangeClearPage } = pageServerErrors;
 
   // Queries
   const { data: page, error: pageError } = useQuery({
@@ -123,8 +126,16 @@ export function PageView() {
       queryClient.invalidateQueries({ queryKey: ['pages'] });
       setIsEditingTitle(false);
       setIsEditingDesc(false);
+      clearPageErrors();
     },
-    onError: () => {
+    onError: (err: unknown) => {
+      if (err instanceof Error) {
+        const maybe = err as unknown as { validation?: unknown };
+        if (maybe.validation) {
+          setPageErrorsFrom(maybe.validation);
+          return;
+        }
+      }
       toast.error(t('page.update_title_error'));
     },
   });
@@ -223,6 +234,7 @@ export function PageView() {
           onUpdate={handleUpdateList}
           onDelete={handleDeleteList}
           dragHandleProps={listeners}
+          onClearField={onChangeClearPage}
         />
       </div>
     );
@@ -233,6 +245,7 @@ export function PageView() {
       setIsEditingTitle(false);
       return;
     }
+    clearPageErrors();
     updatePageMutation.mutate({ title: editPageTitle.trim() });
   };
 
@@ -241,6 +254,7 @@ export function PageView() {
       setIsEditingDesc(false);
       return;
     }
+    clearPageErrors();
     updatePageMutation.mutate({ description: editPageDesc.trim() || undefined });
   };
 
@@ -321,14 +335,19 @@ export function PageView() {
 
                   {isEditingTitle ? (
                     <div className="flex items-center gap-2 flex-1 max-w-lg">
-                      <Input
-                        value={editPageTitle}
-                        onChange={(e) => setEditPageTitle(e.target.value)}
-                        onKeyDown={handleKeyDownTitle}
-                        onBlur={handleUpdatePageTitle}
-                        autoFocus
-                        className="text-xl font-bold h-10"
-                      />
+                       <Input
+                         value={editPageTitle}
+                         onChange={(e) => {
+                          setEditPageTitle(e.target.value);
+                            if (onChangeClearPage) onChangeClearPage('title')(e);
+                         }}
+                         onKeyDown={handleKeyDownTitle}
+                         onBlur={handleUpdatePageTitle}
+                         autoFocus
+                         className="text-xl font-bold h-10"
+                       />
+                       {pageErrors['title'] && <p className="text-sm text-destructive mt-1">{pageErrors['title']}</p>}
+
                       <Button
                         size="icon"
                         variant="ghost"
@@ -354,9 +373,9 @@ export function PageView() {
               <div className="pl-[52px] sm:pl-[76px]">
                 {isEditingDesc ? (
                   <div className="flex items-start gap-2 max-w-lg">
-                    <Textarea
-                      value={editPageDesc}
-                      onChange={(e) => setEditPageDesc(e.target.value)}
+                      <Textarea
+                       value={editPageDesc}
+                       onChange={(e) => { setEditPageDesc(e.target.value); if (onChangeClearPage) onChangeClearPage('description')(e); }}
                       onKeyDown={handleKeyDownDesc}
                       onBlur={handleUpdatePageDescription}
                       autoFocus

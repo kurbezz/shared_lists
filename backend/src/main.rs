@@ -1,6 +1,7 @@
 mod config;
 mod error;
 mod middleware;
+mod validators;
 mod models;
 mod repositories;
 mod routes;
@@ -27,6 +28,7 @@ use axum::http::Method;
 use axum::http::header::{AUTHORIZATION, ACCEPT, CONTENT_TYPE, STRICT_TRANSPORT_SECURITY, X_FRAME_OPTIONS, X_CONTENT_TYPE_OPTIONS, CONTENT_SECURITY_POLICY, REFERRER_POLICY};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::set_header::SetResponseHeaderLayer;
+use tower_http::limit::RequestBodyLimitLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -154,6 +156,8 @@ async fn main() -> anyhow::Result<()> {
         .nest("/api", public_routes)
         .nest("/api", protected_routes)
         .layer(cors)
+        // Limit JSON body size to 64 KiB to avoid OOM / huge payloads
+        .layer(RequestBodyLimitLayer::new(64 * 1024))
         // Security response headers
         .layer(SetResponseHeaderLayer::overriding(
             STRICT_TRANSPORT_SECURITY,

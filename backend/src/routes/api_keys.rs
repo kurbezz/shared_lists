@@ -1,6 +1,8 @@
 use crate::error::AppError;
 use crate::models::{ApiKeyResponse, Claims, CreateApiKeyResponse};
 use crate::services::ApiKeyService;
+use crate::validators::{validate_api_key_name, validate_scopes};
+use crate::error::FieldError;
 use axum::{
     extract::{Extension, Json, Path, State, Query},
     response::Json as ResponseJson,
@@ -18,7 +20,7 @@ pub struct ApiKeysRouterState {
     pub api_key_service: Arc<ApiKeyService>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, serde::Serialize)]
 pub struct CreateApiKeyRequest {
     pub name: Option<String>,
     pub scopes: Vec<String>,
@@ -39,9 +41,33 @@ async fn create_api_key(
     let user_id = Uuid::parse_str(&claims.sub)
         .map_err(|_| AppError::BadRequest("Invalid user ID".to_string()))?;
 
+    // Validate name and scopes and aggregate field errors
+    let mut errors: Vec<FieldError> = Vec::new();
+
+    let mut name_res = validate_api_key_name(&payload.name);
+    if let Err(crate::error::AppError::Validation(ref mut es)) = name_res {
+        errors.append(es);
+    } else if let Err(e) = name_res {
+        return Err(e);
+    }
+
+    let mut scopes_res = validate_scopes(&payload.scopes);
+    if let Err(crate::error::AppError::Validation(ref mut es)) = scopes_res {
+        errors.append(es);
+    } else if let Err(e) = scopes_res {
+        return Err(e);
+    }
+
+    if !errors.is_empty() {
+        return Err(crate::error::AppError::Validation(errors));
+    }
+
+    let name = name_res.unwrap();
+    let scopes = scopes_res.unwrap();
+
     let response = state
         .api_key_service
-        .create_api_key(user_id, payload.name, payload.scopes)
+        .create_api_key(user_id, name, scopes)
         .await
         .map_err(|e| {
             tracing::error!("Failed to create API key: {:?}", e);
@@ -164,6 +190,61 @@ mod tests {
         let response = result.unwrap().0;
         assert!(!response.token.is_empty());
         assert!(!response.id.is_empty());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_create_api_key_validation_json() -> anyhow::Result<()> {
+        let pool = setup_db().await;
+        
+        // Create test user
+        let user_repo = UserRepository::new(pool.clone());
+        let user = user_repo.create(CreateUser {
+            twitch_id: "testv".to_string(),
+            username: "testuserv".to_string(),
+            display_name: None,
+            profile_image_url: None,
+            email: None,
+        }).await?;
+
+        let api_key_repo = ApiKeyRepository::new(pool);
+        let api_key_service = Arc::new(ApiKeyService::new(api_key_repo));
+
+        let claims = Claims {
+            sub: user.id.to_string(),
+            twitch_id: user.twitch_id.clone(),
+            username: user.username.clone(),
+            exp: 9999999999,
+            scopes: None,
+        };
+
+        // Invalid scopes: empty
+        let request = CreateApiKeyRequest {
+            name: Some("Test Key".to_string()),
+            scopes: vec![],
+        };
+        // Call via router so we can inspect the HTTP response body
+        let app = api_keys_router(ApiKeysRouterState { api_key_service: api_key_service.clone() });
+
+        use axum::http::{Request, Method};
+        use axum::body::Body;
+        use tower::util::ServiceExt;
+
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri("/settings/api-keys")
+            .header("content-type", "application/json")
+            .extension(claims)
+            .body(Body::from(serde_json::to_vec(&request)?))?;
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 400);
+        let bytes = axum::body::to_bytes(resp.into_body(), 64 * 1024).await?;
+        let v: serde_json::Value = serde_json::from_slice(&bytes)?;
+        assert_eq!(v["error"].as_str(), Some("Validation failed"));
+        let errors = v["errors"].as_array().unwrap();
+        assert!(errors.iter().any(|e| e["field"].as_str() == Some("scopes")));
 
         Ok(())
     }

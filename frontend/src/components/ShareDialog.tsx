@@ -33,6 +33,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getValidationFromError, parseValidationErrors } from '@/lib/validation';
 
 interface ShareDialogProps {
   page: Page;
@@ -71,6 +72,18 @@ export function ShareDialog({ page }: ShareDialogProps) {
       queryClient.invalidateQueries({ queryKey: ['pages'] });
     },
     onError: (err) => {
+      // If the backend returned structured validation errors, prefer the field message
+      try {
+        const v = getValidationFromError(err) ?? err;
+        const parsed = parseValidationErrors(v);
+        if (parsed['public_slug']) {
+          setLinkError(parsed['public_slug']);
+          return;
+        }
+      } catch {
+        /* fallthrough */
+      }
+
       const errorMessage = err instanceof Error ? err.message : t('share.save_failed');
       setLinkError(errorMessage);
     },

@@ -8,7 +8,7 @@ edition = "2021"
 axum = { version = "0.7", features = ["macros"] }
 tokio = { version = "1", features = ["full"] }
 tower = { version = "0.4", features = ["util"] }
-tower-http = { version = "0.5", features = ["cors", "trace", "set-header"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "set-header", "limit"] }
 
 # Required for tests that call router oneshot
 hyper = "0.14"

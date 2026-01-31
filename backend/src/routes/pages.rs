@@ -4,6 +4,7 @@ use crate::models::{
     PageWithPermission, SetPublicSlug, UpdatePage, UpdatePermission,
 };
 use crate::repositories::PageRepository;
+use crate::validators::{validate_title, validate_description, validate_public_slug};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -63,6 +64,31 @@ async fn create_page(
     let user_id = Uuid::parse_str(&claims.sub)
         .map_err(|_| AppError::BadRequest("Invalid user ID".to_string()))?;
 
+    // Validate title and description and collect all field errors
+    let mut errors: Vec<crate::error::FieldError> = Vec::new();
+
+    let mut title_res = validate_title(&payload.title);
+    if let Err(crate::error::AppError::Validation(ref mut es)) = title_res {
+        errors.append(es);
+    } else if let Err(e) = title_res {
+        return Err(e);
+    }
+
+    let mut desc_res = validate_description(&payload.description);
+    if let Err(crate::error::AppError::Validation(ref mut es)) = desc_res {
+        errors.append(es);
+    } else if let Err(e) = desc_res {
+        return Err(e);
+    }
+
+    if !errors.is_empty() {
+        return Err(crate::error::AppError::Validation(errors));
+    }
+
+    let mut payload = payload;
+    payload.title = title_res.unwrap();
+    payload.description = desc_res.unwrap();
+
     let page = state.page_repo.create(user_id, payload).await?;
 
     Ok(Json(page))
@@ -117,6 +143,29 @@ async fn update_page(
         return Err(AppError::Forbidden);
     }
 
+    // Validate inputs if provided and collect all field errors
+    let mut errors: Vec<crate::error::FieldError> = Vec::new();
+
+    let mut payload = payload;
+    if let Some(ref t) = payload.title {
+        match validate_title(t) {
+            Ok(v) => payload.title = Some(v),
+            Err(crate::error::AppError::Validation(mut es)) => errors.append(&mut es),
+            Err(e) => return Err(e),
+        }
+    }
+    if payload.description.is_some() {
+        match validate_description(&payload.description) {
+            Ok(v) => payload.description = v,
+            Err(crate::error::AppError::Validation(mut es)) => errors.append(&mut es),
+            Err(e) => return Err(e),
+        }
+    }
+
+    if !errors.is_empty() {
+        return Err(crate::error::AppError::Validation(errors));
+    }
+
     let page = state
         .page_repo
         .update(page_id, payload)
@@ -156,7 +205,7 @@ async fn set_public_slug(
     State(state): State<PagesRouterState>,
     Extension(claims): Extension<Claims>,
     Path(page_id): Path<Uuid>,
-    Json(payload): Json<SetPublicSlug>,
+    Json(mut payload): Json<SetPublicSlug>,
 ) -> Result<Json<Page>, AppError> {
     let user_id = Uuid::parse_str(&claims.sub)
         .map_err(|_| AppError::BadRequest("Invalid user ID".to_string()))?;
@@ -174,11 +223,10 @@ async fn set_public_slug(
 
     // Validate slug format if provided
     if let Some(ref slug) = payload.public_slug {
-        let slug_regex = regex::Regex::new(r"^[a-z0-9-]{3,50}$").unwrap();
-        if !slug_regex.is_match(slug) {
-            return Err(AppError::BadRequest(
-                "Slug must be 3-50 characters, lowercase letters, numbers, and hyphens only".to_string(),
-            ));
+        match validate_public_slug(slug) {
+            Ok(v) => payload.public_slug = Some(v),
+            Err(crate::error::AppError::Validation(es)) => return Err(crate::error::AppError::Validation(es)),
+            Err(e) => return Err(e),
         }
     }
 
@@ -565,6 +613,51 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_create_page_validation_json() -> anyhow::Result<()> {
+        let pool = setup_db().await;
+        let page_repo = Arc::new(crate::repositories::PageRepository::new(pool.clone()));
+        let (user, _jwt) = create_test_user_with_jwt(&pool, "twv", "userv").await?;
+
+        let state = PagesRouterState {
+            page_repo: page_repo.clone(),
+        };
+        let app = pages_router(state);
+
+        // Create a title that's too long (TITLE_MAX is 200)
+        let long_title = "x".repeat(201);
+        let create_payload = serde_json::json!({
+            "title": long_title,
+            "description": "A test page"
+        });
+
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri("/pages")
+            .header("content-type", "application/json")
+            .extension(Claims {
+                sub: user.id.to_string(),
+                twitch_id: user.twitch_id.clone(),
+                username: user.username.clone(),
+                exp: 9999999999,
+                scopes: None,
+            })
+            .body(Body::from(serde_json::to_vec(&create_payload)?))?;
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 400);
+
+        let bytes = body::to_bytes(resp.into_body(), 64 * 1024).await?;
+        let v: serde_json::Value = serde_json::from_slice(&bytes)?;
+        assert_eq!(v["error"].as_str(), Some("Validation failed"));
+        let errors = v["errors"].as_array().unwrap();
+        // Find title error
+        let title_err = errors.iter().find(|e| e["field"].as_str() == Some("title")).unwrap();
+        assert!(title_err["message"].as_str().unwrap().contains("Title must be between"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_permissions_workflow() -> anyhow::Result<()> {
         let pool = setup_db().await;
         let page_repo = Arc::new(crate::repositories::PageRepository::new(pool.clone()));
@@ -675,4 +768,3 @@ mod tests {
         Ok(())
     }
 }
-

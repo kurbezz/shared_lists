@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { List, UpdateList, UpdateListItem, ListItem as ListItemType } from '@/types';
 import { apiClient } from '@/api/client';
+import { parseValidationErrors, getValidationFromError } from '@/lib/validation';
+import useServerErrors from '@/hooks/useServerErrors';
 import { ListItem } from './ListItem';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -30,9 +32,13 @@ interface ListCardProps {
   onUpdate: (listId: string, data: Partial<UpdateList>) => Promise<void>;
   onDelete: (listId: string) => Promise<void>;
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
+  /** optional validation error for this list (e.g. { title: '...' }) */
+  error?: string | null;
+  /** optional helper from parent to clear a server error for a field when input changes */
+  onClearField?: (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
 }
 
-export function ListCard({ list, canEdit, onUpdate, onDelete, dragHandleProps }: ListCardProps) {
+export function ListCard({ list, canEdit, onUpdate, onDelete, dragHandleProps, error, onClearField }: ListCardProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
@@ -40,6 +46,8 @@ export function ListCard({ list, canEdit, onUpdate, onDelete, dragHandleProps }:
   const [showCheckBoxes, setShowCheckBoxes] = useState(list.show_checkboxes);
   const [showProgress, setShowProgress] = useState(list.show_progress);
   const [newItemContent, setNewItemContent] = useState('');
+  const addItemServerErrors = useServerErrors();
+  const { errors: addItemErrors, setFrom: setAddItemErrorsFrom, clear: clearAddItemErrors, onChangeClear: onChangeClearAddItem } = addItemServerErrors;
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   useEffect(() => {
@@ -47,6 +55,14 @@ export function ListCard({ list, canEdit, onUpdate, onDelete, dragHandleProps }:
     setShowCheckBoxes(list.show_checkboxes);
     setShowProgress(list.show_progress);
   }, [list]);
+
+  // apply server errors produced for add-item into the local input if present
+  useEffect(() => {
+    // If addItemErrors contains a 'content' message, keep it displayed via local state
+    if (addItemErrors && addItemErrors['content']) {
+      // no-op for now; the UI uses addItemErrors['content'] directly
+    }
+  }, [addItemErrors]);
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ['list-items', list.id],
@@ -59,19 +75,37 @@ export function ListCard({ list, canEdit, onUpdate, onDelete, dragHandleProps }:
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['list-items', list.id] });
       setNewItemContent('');
+      clearAddItemErrors();
     },
-    onError: () => {
+    onError: (err: unknown) => {
+      const v = getValidationFromError(err) ?? err;
+      // If validation info exists, set it
+      const parsedAdd = parseValidationErrors(v);
+      if (Object.keys(parsedAdd).length > 0) {
+        setAddItemErrorsFrom(v);
+        return;
+      }
       toast.error(t('list.create_error'));
     },
   });
 
-  const updateItemMutation = useMutation({
+  const updateItemMutation = useMutation<ListItemType, unknown, { itemId: string; data: UpdateListItem }>({
     mutationFn: ({ itemId, data }: { itemId: string; data: UpdateListItem }) =>
       apiClient.updateListItem(list.id, itemId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['list-items', list.id] });
     },
-    onError: () => {
+    onError: (_err: unknown, vars: { itemId: string; data: UpdateListItem } | undefined) => {
+      // If validation errors are returned, map them to the specific item
+      // so the UI can display per-item messages.
+      const v = getValidationFromError(_err) ?? _err;
+      if (vars) {
+        const parsed = parseValidationErrors(v);
+        if (parsed['content']) {
+          setUpdateItemErrors((s) => ({ ...s, [vars.itemId]: parsed['content'] }));
+          return;
+        }
+      }
       toast.error(t('list.update_error'));
     },
   });
@@ -85,6 +119,8 @@ export function ListCard({ list, canEdit, onUpdate, onDelete, dragHandleProps }:
       toast.error(t('list.delete_error'));
     },
   });
+
+  const [updateItemErrors, setUpdateItemErrors] = useState<Record<string,string>>({});
 
   const updateItemsPositionsMutation = useMutation({
     mutationFn: (updates: { itemId: string; position: number }[]) =>
@@ -142,10 +178,17 @@ export function ListCard({ list, canEdit, onUpdate, onDelete, dragHandleProps }:
 
   const handleAddItem = () => {
     if (!newItemContent.trim()) return;
+    clearAddItemErrors();
     addItemMutation.mutate(newItemContent.trim());
   };
 
   const handleUpdateItem = async (itemId: string, data: UpdateListItem) => {
+    // Clear any prior error for this item
+    setUpdateItemErrors((s) => {
+      const copy = { ...s };
+      delete copy[itemId];
+      return copy;
+    });
     updateItemMutation.mutate({ itemId, data });
   };
 
@@ -208,6 +251,7 @@ export function ListCard({ list, canEdit, onUpdate, onDelete, dragHandleProps }:
           onUpdate={handleUpdateItem}
           onDelete={handleDeleteItem}
           dragHandleProps={listeners}
+          error={updateItemErrors[item.id]}
         />
       </div>
     );
@@ -229,14 +273,18 @@ export function ListCard({ list, canEdit, onUpdate, onDelete, dragHandleProps }:
           {isEditing ? (
             <div className="flex flex-col gap-3">
               <div className="flex gap-1 items-center">
-                <Input
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  onKeyDown={handleTitleKeyDown}
-                  onBlur={handleUpdateTitle}
-                  autoFocus
-                  className="h-9 font-semibold text-base"
-                />
+                   <Input
+                     value={editTitle}
+                     onChange={(e) => {
+                       setEditTitle(e.target.value);
+                       if (onClearField) onClearField('title')(e);
+                     }}
+                    onKeyDown={handleTitleKeyDown}
+                    onBlur={handleUpdateTitle}
+                    autoFocus
+                    className="h-9 font-semibold text-base"
+                  />
+                {error && <p className="text-sm text-destructive mt-1">{error}</p>}
                 <Button
                   size="icon"
                   variant="ghost"
@@ -348,14 +396,22 @@ export function ListCard({ list, canEdit, onUpdate, onDelete, dragHandleProps }:
         {canEdit && (
           <CardFooter className="p-3 pt-2 border-t border-slate-100 dark:border-slate-700">
             <div className="flex gap-2 w-full">
-              <Input
-                value={newItemContent}
-                onChange={(e) => setNewItemContent(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={t('list.add_item_placeholder')}
-                disabled={addItemMutation.isPending}
-                className="h-9"
-              />
+                <div className="flex-1">
+                  <Input
+                    value={newItemContent}
+                    onChange={(e) => {
+                      setNewItemContent(e.target.value);
+                      if (onChangeClearAddItem) onChangeClearAddItem('content')(e);
+                    }}
+                    onKeyDown={handleKeyDown}
+                    placeholder={t('list.add_item_placeholder')}
+                    disabled={addItemMutation.isPending}
+                    className="h-9"
+                  />
+                  {addItemErrors['content'] && (
+                    <p className="text-sm text-destructive mt-1">{addItemErrors['content']}</p>
+                  )}
+                </div>
               <Button
                 size="icon"
                 onClick={handleAddItem}

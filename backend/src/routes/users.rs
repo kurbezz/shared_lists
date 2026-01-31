@@ -1,5 +1,7 @@
 use crate::models::{Claims, User};
 use crate::repositories::UserRepository;
+use crate::validators::{validate_display_name, validate_username};
+use crate::error::FieldError;
 use axum::{
     extract::{Query, State, Json},
     response::Json as ResponseJson,
@@ -83,8 +85,32 @@ async fn update_current_user(
         .await?
         .ok_or(AppError::NotFound)?;
 
-    let username = payload.username.as_deref().unwrap_or(&existing.username);
-    let display_name = payload.display_name.as_deref().or(existing.display_name.as_deref());
+    let username_raw = payload.username.as_deref().unwrap_or(&existing.username);
+
+    // Aggregate validation errors for username and display_name
+    let mut errors: Vec<FieldError> = Vec::new();
+
+    let username = match validate_username(username_raw) {
+        Ok(u) => u,
+        Err(crate::error::AppError::Validation(mut es)) => {
+            errors.append(&mut es);
+            existing.username.clone()
+        }
+        Err(e) => return Err(e),
+    };
+
+    let display_name = match validate_display_name(&payload.display_name) {
+        Ok(opt) => opt.or(existing.display_name.clone()),
+        Err(crate::error::AppError::Validation(mut es)) => {
+            errors.append(&mut es);
+            existing.display_name.clone()
+        }
+        Err(e) => return Err(e),
+    };
+
+    if !errors.is_empty() {
+        return Err(crate::error::AppError::Validation(errors));
+    }
     let profile_image_url = payload
         .profile_image_url
         .as_deref()
@@ -93,7 +119,7 @@ async fn update_current_user(
 
     let updated = state
         .user_repo
-        .update_by_id(user_id, username, display_name, profile_image_url, email)
+        .update_by_id(user_id, &username, display_name.as_deref(), profile_image_url, email)
         .await?;
 
     Ok(Json(updated))
@@ -270,5 +296,49 @@ mod tests {
 
         Ok(())
     }
-}
 
+    #[tokio::test]
+    async fn test_update_user_validation_json() -> anyhow::Result<()> {
+        let pool = setup_db().await;
+        let user_repo = Arc::new(crate::repositories::UserRepository::new(pool.clone()));
+
+        let user = user_repo
+            .create(CreateUser {
+                twitch_id: "tw1".to_string(),
+                username: "validuser".to_string(),
+                display_name: Some("Old Name".to_string()),
+                profile_image_url: None,
+                email: None,
+            })
+            .await?;
+
+        let state = UsersRouterState { user_repo };
+        let app = users_router(state);
+        let claims = create_claims(&user);
+
+        // Provide invalid username and display_name (username too short, display name too long)
+        let bad_payload = serde_json::json!({
+            "username": "x",
+            "display_name": "Y".repeat(100)
+        });
+
+        let req = Request::builder()
+            .method(Method::PATCH)
+            .uri("/users/me")
+            .header("content-type", "application/json")
+            .extension(claims)
+            .body(Body::from(serde_json::to_vec(&bad_payload)?))?;
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 400);
+
+        let bytes = body::to_bytes(resp.into_body(), 64 * 1024).await?;
+        let v: serde_json::Value = serde_json::from_slice(&bytes)?;
+        assert_eq!(v["error"].as_str(), Some("Validation failed"));
+        let errors = v["errors"].as_array().unwrap();
+        assert!(errors.iter().any(|e| e["field"].as_str() == Some("username")));
+        assert!(errors.iter().any(|e| e["field"].as_str() == Some("display_name")));
+
+        Ok(())
+    }
+}

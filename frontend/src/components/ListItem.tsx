@@ -23,9 +23,10 @@ interface ListItemProps {
   onUpdate: (itemId: string, data: UpdateListItem) => Promise<void>;
   onDelete: (itemId: string) => Promise<void>;
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
+  error?: string | null;
 }
 
-export function ListItem({ item, canEdit, onUpdate, onDelete, dragHandleProps }: ListItemProps) {
+export function ListItem({ item, canEdit, onUpdate, onDelete, dragHandleProps, error }: ListItemProps) {
   const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(item.content);
@@ -103,7 +104,7 @@ export function ListItem({ item, canEdit, onUpdate, onDelete, dragHandleProps }:
           <Check className="w-4 h-4 text-green-500 shrink-0" />
         )}
 
-        {isEditing ? (
+    {isEditing ? (
           <div className="flex-1 flex gap-1 items-center">
             <Input
               value={editContent}
@@ -113,6 +114,7 @@ export function ListItem({ item, canEdit, onUpdate, onDelete, dragHandleProps }:
               autoFocus
               className="h-8 text-sm"
             />
+            {error && <p className="text-sm text-destructive mt-1">{error}</p>}
             <Button
               size="icon"
               variant="ghost"

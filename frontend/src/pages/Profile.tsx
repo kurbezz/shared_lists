@@ -1,10 +1,14 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useForm } from '@tanstack/react-form';
+// zod previously used for inline validate functions; validation now happens in handlers
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
 import { apiClient } from '@/api/client';
+import useServerErrors from '@/hooks/useServerErrors';
 import type { ApiKey } from '@/types';
 import { UserMenu } from '@/components/UserMenu';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -27,12 +31,33 @@ export function Profile() {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
-  const currentLang = i18n.language || 'en';
+  const /* currentLang intentionally unused */ _currentLang = i18n.language || 'en';
 
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [loadingKeys, setLoadingKeys] = useState(false);
-  const [name, setName] = useState('');
-  const [scopes, setScopes] = useState('');
+  const { user, refreshUser } = useAuth();
+
+  // profile form is the single source of truth for these values
+  // local state removed in favor of profileForm
+  const profileForm = useForm({
+    defaultValues: {
+      display_name: '',
+      profile_image_url: '',
+      email: '',
+    },
+    // keep validation in submit handlers via zod
+  });
+  const profileServerErrors = useServerErrors();
+  const { errors: profileErrors, setFrom: setProfileErrorsFrom, clear: clearProfileErrors, onChangeClear: onChangeClearProfile, applyToForm: applyProfileErrorsToForm } = profileServerErrors;
+  // API key creation form is fully controlled by TanStack form
+  const createKeyForm = useForm({
+    defaultValues: {
+      name: '',
+      scopes: '',
+    },
+  });
+  const createKeyServerErrors = useServerErrors();
+  const { errors: createErrors, setFrom: setCreateErrorsFrom, clear: clearCreateErrors, onChangeClear: onChangeClearCreate, applyToForm: applyCreateKeyErrorsToForm } = createKeyServerErrors;
   const [createdToken, setCreatedToken] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [revokeId, setRevokeId] = useState<string | null>(null);
@@ -62,16 +87,37 @@ export function Profile() {
     fetchKeys();
   }, [fetchKeys]);
 
+  useEffect(() => {
+    if (user) {
+      profileForm.setFieldValue('display_name', user.display_name || '');
+      profileForm.setFieldValue('profile_image_url', user.profile_image_url || '');
+      profileForm.setFieldValue('email', user.email || '');
+    }
+  }, [user, profileForm]);
+
+  // apply server errors into forms
+  useEffect(() => {
+    applyProfileErrorsToForm?.(profileForm);
+  }, [profileErrors, applyProfileErrorsToForm, profileForm]);
+  useEffect(() => {
+    applyCreateKeyErrorsToForm?.(createKeyForm);
+  }, [createErrors, applyCreateKeyErrorsToForm, createKeyForm]);
+
+  // keep form state in sync with local state
+  // local state removed; inputs now write directly to profileForm
+
   const handleCreate = async () => {
-    const scopesArr = scopes
+    const values = (createKeyForm.state as unknown as { values: Record<string, unknown> }).values as { name?: string; scopes?: string };
+    const scopesArr = (values.scopes || '')
       .split(',')
-      .map((s) => s.trim())
+      .map((s: string) => s.trim())
       .filter(Boolean);
 
     setCreating(true);
     try {
-      const resp = await apiClient.createApiKey({ name: name || null, scopes: scopesArr });
+      const resp = await apiClient.createApiKey({ name: values.name || null, scopes: scopesArr });
       setCreatedToken(resp.token);
+      clearCreateErrors();
       toast.success(t('profile.created_notify'));
       try {
         await navigator.clipboard.writeText(resp.token);
@@ -80,11 +126,21 @@ export function Profile() {
       } catch {
         // ignore clipboard errors
       }
-      setName('');
-      setScopes('');
+      // values cleared from the form instance below
+      createKeyForm.setFieldValue('name', '');
+      createKeyForm.setFieldValue('scopes', '');
       fetchKeys();
     } catch (err) {
       console.error('Create API key failed:', err);
+      // Wire up validation errors if backend provided them
+      if (err instanceof Error) {
+        const maybe = err as { validation?: unknown };
+        if (maybe.validation) {
+          setCreateErrorsFrom(maybe.validation);
+          return;
+        }
+      }
+
       const msg = err instanceof Error ? err.message : t('profile.create_failed');
       toast.error(msg);
     } finally {
@@ -102,6 +158,37 @@ export function Profile() {
       toast.error(t('profile.revoke_failed'));
     } finally {
       setRevokeId(null);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    clearProfileErrors();
+    try {
+      const values = (profileForm.state as unknown as { values: Record<string, unknown> }).values as { display_name?: string; profile_image_url?: string; email?: string };
+      const payload = {
+        display_name: values.display_name || null,
+        profile_image_url: values.profile_image_url || null,
+        email: values.email || null,
+      } as unknown as { display_name?: string | null; profile_image_url?: string | null; email?: string | null };
+      await apiClient.updateCurrentUser(payload);
+      toast.success(t('profile.saved'));
+      // Refresh context user
+      try {
+        await refreshUser();
+      } catch {
+        // ignore
+      }
+    } catch (err) {
+      console.error('Update profile failed:', err);
+      if (err instanceof Error) {
+        const maybe = err as { validation?: unknown };
+        if (maybe.validation) {
+          setProfileErrorsFrom(maybe.validation);
+          return;
+        }
+      }
+      const msg = err instanceof Error ? err.message : t('profile.save_failed');
+      toast.error(msg);
     }
   };
 
@@ -176,17 +263,44 @@ export function Profile() {
           <CardContent>
             <div className="grid gap-4 max-w-sm">
               <div className="grid gap-2">
-                <Label htmlFor="language">{t('profile.label_language')}</Label>
-                <select
-                  id="language"
-                  value={currentLang}
-                  onChange={handleLangChange}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  <option value="en">English</option>
-                  <option value="ru">Русский</option>
-                </select>
+                <Label htmlFor="display_name">{t('label_display_name') || 'Display name'}</Label>
+                <Input
+                  id="display_name"
+                  value={profileForm.getFieldValue('display_name') ?? ''}
+                  onChange={(e) => {
+                    profileForm.setFieldValue('display_name', e.target.value);
+                    if (onChangeClearProfile) onChangeClearProfile('display_name')(e);
+                  }}
+                  placeholder={t('profile.label_display_name')}
+                />
+                {profileErrors['display_name'] && <p className="text-sm text-destructive mt-1">{profileErrors['display_name']}</p>}
               </div>
+              <div className="grid gap-2">
+                <Label htmlFor="profile_image_url">{t('profile.label_profile_image') || 'Profile image URL'}</Label>
+                <Input
+                  id="profile_image_url"
+                  value={profileForm.getFieldValue('profile_image_url') ?? ''}
+                  onChange={(e) => {
+                    profileForm.setFieldValue('profile_image_url', e.target.value);
+                    if (onChangeClearProfile) onChangeClearProfile('profile_image_url')(e);
+                  }}
+                  placeholder={t('profile.label_profile_image')}
+                />
+                {profileErrors['profile_image_url'] && <p className="text-sm text-destructive mt-1">{profileErrors['profile_image_url']}</p>}
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="email">Email</Label>
+                <Input id="email" value={profileForm.getFieldValue('email') ?? ''} onChange={(e) => { profileForm.setFieldValue('email', e.target.value); if (onChangeClearProfile) onChangeClearProfile('email')(e); }} placeholder="you@example.com" />
+                {profileErrors['email'] && <p className="text-sm text-destructive mt-1">{profileErrors['email']}</p>}
+              </div>
+                <div className="flex gap-2">
+                 <Button onClick={handleSaveProfile} className="bg-violet-500 hover:bg-violet-600">{t('profile.save')}</Button>
+                 <select onChange={handleLangChange} defaultValue={_currentLang} className="border rounded px-2 py-1 text-sm">
+                   <option value="en">English</option>
+                   <option value="es">Español</option>
+                   <option value="fr">Français</option>
+                 </select>
+               </div>
             </div>
           </CardContent>
         </Card>
@@ -205,21 +319,33 @@ export function Profile() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="grid gap-2">
                   <Label htmlFor="key-name">{t('profile.label_name')}</Label>
-                  <Input
-                    id="key-name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="My bot key"
-                  />
+                   <Input
+                     id="key-name"
+                     value={createKeyForm.getFieldValue('name') ?? ''}
+                      onChange={(e) => {
+                        createKeyForm.setFieldValue('name', e.target.value);
+                        if (onChangeClearCreate) onChangeClearCreate('name')(e);
+                      }}
+                     placeholder="My bot key"
+                   />
+                  {createErrors['name'] && (
+                    <p className="text-sm text-destructive mt-1">{createErrors['name']}</p>
+                  )}
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="key-scopes">{t('profile.label_scopes')}</Label>
-                  <Input
-                    id="key-scopes"
-                    value={scopes}
-                    onChange={(e) => setScopes(e.target.value)}
-                    placeholder="read,write"
-                  />
+                    <Input
+                      id="key-scopes"
+                      value={createKeyForm.getFieldValue('scopes') ?? ''}
+                       onChange={(e) => {
+                          createKeyForm.setFieldValue('scopes', e.target.value);
+                          if (onChangeClearCreate) onChangeClearCreate('scopes')(e);
+                        }}
+                      placeholder="read,write"
+                    />
+                  {createErrors['scopes'] && (
+                    <p className="text-sm text-destructive mt-1">{createErrors['scopes']}</p>
+                  )}
                 </div>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">{t('profile.scopes_hint')}</p>

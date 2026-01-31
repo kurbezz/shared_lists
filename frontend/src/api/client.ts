@@ -137,6 +137,19 @@ class ApiClient {
         status: response.status,
         body: errorData,
       });
+
+      // If backend returned structured validation errors, attach them to the
+      // thrown Error instance so callers can show per-field messages.
+      if (
+        errorData &&
+        typeof errorData === "object" &&
+        (errorData["error"] === "Validation failed" || Array.isArray(errorData["errors"]))
+      ) {
+        const e = new Error(msg) as Error & { validation?: unknown };
+        e.validation = (errorData["errors"] as unknown) || null;
+        throw e;
+      }
+
       throw new Error(msg);
     }
 

@@ -15,9 +15,17 @@ export function AuthCallback() {
     // After OAuth redirect, backend has set httpOnly cookie. Call backend to get current user.
     (async () => {
       try {
+        // Log search params and the fact that we are about to call login()
+        console.debug(
+          "[AuthCallback] searchParams:",
+          Array.from(searchParams.entries()),
+        );
+        console.debug("[AuthCallback] calling login()");
         await login();
+        console.debug("[AuthCallback] login() succeeded — navigating to /");
         navigate("/", { replace: true });
-      } catch {
+      } catch (e) {
+        console.error("[AuthCallback] login() failed:", e);
         navigate("/login", { replace: true });
       }
     })();

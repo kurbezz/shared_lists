@@ -20,14 +20,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading] = useState(false);
 
   const refreshUser = useCallback(async () => {
+    console.debug("[Auth] refreshUser: starting");
     try {
       const data = await apiClient.getCurrentUser();
+      console.debug("[Auth] refreshUser: got user", data);
       setUser(data);
     } catch (e) {
-      console.error("Failed to refresh user:", e);
+      console.error("[Auth] refreshUser: failed", e);
       // Ensure we set user to null on failure so the app knows there is no logged-in user
       // and avoids repeatedly trying to refresh.
       setUser(null);
+    } finally {
+      console.debug("[Auth] refreshUser: finished");
     }
   }, []);
 
@@ -39,9 +43,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       typeof window !== "undefined" && window.location
         ? window.location.pathname
         : "";
-    const isAuthPage = pathname === "/login" || pathname.startsWith("/auth");
+    const isAuthPage = pathname.startsWith("/auth");
+    // If we're on /login, still attempt to refresh user so reload can detect cookie.
     if (isAuthPage) {
-      // Do nothing: auth-related pages will handle the flow themselves (AuthCallback calls getCurrentUser()).
+      // Do nothing: auth callbacks handle their own flow (AuthCallback calls getCurrentUser()).
       return;
     }
 

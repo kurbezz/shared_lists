@@ -45,7 +45,17 @@ function LoadingScreen() {
 }
 
 function PrivateRoute({ children }: { children: React.ReactElement }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
+
+  // Debug: log auth state when route guard runs
+  console.debug(
+    "[Route] PrivateRoute isLoading=",
+    isLoading,
+    "isAuthenticated=",
+    isAuthenticated,
+    "user=",
+    user,
+  );
 
   if (isLoading) {
     return <LoadingScreen />;
@@ -55,7 +65,17 @@ function PrivateRoute({ children }: { children: React.ReactElement }) {
 }
 
 function PublicRoute({ children }: { children: React.ReactElement }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
+
+  // Debug: log auth state when route guard runs
+  console.debug(
+    "[Route] PublicRoute isLoading=",
+    isLoading,
+    "isAuthenticated=",
+    isAuthenticated,
+    "user=",
+    user,
+  );
 
   if (isLoading) {
     return <LoadingScreen />;

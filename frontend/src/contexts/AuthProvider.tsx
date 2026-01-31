@@ -17,10 +17,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Token is no longer stored in localStorage (httpOnly cookie flow). Keep token state null.
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const refreshUser = useCallback(async () => {
     console.debug("[Auth] refreshUser: starting");
+    setIsLoading(true);
     try {
       const data = await apiClient.getCurrentUser();
       console.debug("[Auth] refreshUser: got user", data);
@@ -31,6 +32,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // and avoids repeatedly trying to refresh.
       setUser(null);
     } finally {
+      setIsLoading(false);
       console.debug("[Auth] refreshUser: finished");
     }
   }, []);

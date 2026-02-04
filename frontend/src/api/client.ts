@@ -99,8 +99,8 @@ class ApiClient {
       }
 
       // Avoid causing a reload/redirect loop when already on an auth-related page
-      // (for example '/login' or the OAuth '/auth/callback'). Only navigate to
-      // '/login' when we're on some other (non-auth) page.
+      // (for example '/login' or the OAuth '/auth/callback') or public pages (/p/:slug).
+      // Only navigate to '/login' when we're on some other (non-auth, non-public) page.
       const pathname =
         typeof window !== "undefined" &&
         window.location &&
@@ -108,7 +108,8 @@ class ApiClient {
           ? window.location.pathname
           : "";
       const isAuthPage = pathname === "/login" || pathname.startsWith("/auth");
-      if (!isAuthPage) {
+      const isPublicPage = pathname.startsWith("/p/");
+      if (!isAuthPage && !isPublicPage) {
         window.location.href = "/login";
       }
       throw new Error("Unauthorized");

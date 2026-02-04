@@ -48,16 +48,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // On mount, try to refresh user (backend will check cookie)
   // Skip attempting refresh when we are on auth-related pages (login, oauth callback)
-  // to avoid causing redirect/reload loops while the auth flow is in progress.
+  // or public pages (/p/:slug) to avoid causing redirect/reload loops.
   useEffect(() => {
     const pathname =
       typeof window !== "undefined" && window.location
         ? window.location.pathname
         : "";
     const isAuthPage = pathname.startsWith("/auth");
+    const isPublicPage = pathname.startsWith("/p/");
     // If we're on /login, still attempt to refresh user so reload can detect cookie.
     if (isAuthPage) {
       // Do nothing: auth callbacks handle their own flow (AuthCallback calls getCurrentUser()).
+      return;
+    }
+    // Skip refresh on public pages - they don't require authentication
+    if (isPublicPage) {
       return;
     }
 

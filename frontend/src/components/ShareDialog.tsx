@@ -159,8 +159,8 @@ export function ShareDialog({ page }: ShareDialogProps) {
         if (!mounted) return;
         const filtered = users.filter((u) => !exclude.has(u.id));
         setSearchResults(filtered);
-      } catch (err) {
-        console.error('Search failed', err);
+      } catch {
+        /* search error is non-fatal; mutation errors are shown via toast */
       } finally {
         if (mounted) setIsSearching(false);
       }
@@ -219,31 +219,35 @@ export function ShareDialog({ page }: ShareDialogProps) {
     revokePermissionMutation.mutate(permId);
   };
 
+  const avatarFallback = (displayName?: string | null, username?: string) => {
+    return (displayName || username || '?')[0].toUpperCase();
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          <Share2 className="w-4 h-4" />
+        <Button variant="outline" size="sm">
+          <Share2 className="size-4" />
           <span className="hidden sm:inline">{t('share.button')}</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Share2 className="w-5 h-5 text-violet-500" />
+            <Share2 className="size-4 text-accent" />
             {t('share.title')}
           </DialogTitle>
           <DialogDescription>{t('share.description')}</DialogDescription>
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as Tab)} className="mt-4">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList>
             <TabsTrigger value="link" className="gap-2">
-              <Link className="w-4 h-4" />
+              <Link className="size-4" />
               {t('share.tabs_link')}
             </TabsTrigger>
             <TabsTrigger value="collaborators" className="gap-2">
-              <Users className="w-4 h-4" />
+              <Users className="size-4" />
               {t('share.tabs_collaborators')}
             </TabsTrigger>
           </TabsList>
@@ -267,13 +271,13 @@ export function ShareDialog({ page }: ShareDialogProps) {
               <div className="space-y-2">
                 <Label>{t('share.current_link')}</Label>
                 <div className="flex gap-2">
-                  <Input value={publicUrl} readOnly className="font-mono text-sm" />
+                  <Input value={publicUrl} readOnly className="font-mono text-[13px]" />
                   <Button size="icon" variant="outline" onClick={handleCopy}>
-                    {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                    {copied ? <Check className="size-4 text-accent" /> : <Copy className="size-4" />}
                   </Button>
                   <Button size="icon" variant="outline" asChild>
                     <a href={publicUrl} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="w-4 h-4" />
+                      <ExternalLink className="size-4" />
                     </a>
                   </Button>
                 </div>
@@ -286,9 +290,10 @@ export function ShareDialog({ page }: ShareDialogProps) {
                   <Button
                     onClick={handleSaveLink}
                     disabled={setPublicSlugMutation.isPending}
-                    className="flex-1 bg-violet-500 hover:bg-violet-600"
+                    variant="primary"
+                    className="flex-1"
                   >
-                    {setPublicSlugMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    {setPublicSlugMutation.isPending && <Loader2 className="size-4 animate-spin" />}
                     {t('share.update_link')}
                   </Button>
                   <Button
@@ -296,7 +301,7 @@ export function ShareDialog({ page }: ShareDialogProps) {
                     variant="destructive"
                     disabled={setPublicSlugMutation.isPending}
                   >
-                    <Trash2 className="w-4 h-4 mr-2" />
+                    <Trash2 className="size-4" />
                     {t('share.remove_link')}
                   </Button>
                 </>
@@ -304,9 +309,10 @@ export function ShareDialog({ page }: ShareDialogProps) {
                 <Button
                   onClick={handleSaveLink}
                   disabled={setPublicSlugMutation.isPending}
-                  className="w-full bg-violet-500 hover:bg-violet-600"
+                  variant="primary"
+                  className="w-full"
                 >
-                  {setPublicSlugMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  {setPublicSlugMutation.isPending && <Loader2 className="size-4 animate-spin" />}
                   {t('share.create_link')}
                 </Button>
               )}
@@ -318,7 +324,7 @@ export function ShareDialog({ page }: ShareDialogProps) {
             <div className="space-y-2">
               <Label>{t('share.collaborators_description')}</Label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -327,15 +333,15 @@ export function ShareDialog({ page }: ShareDialogProps) {
                 />
                 {searchQuery && (
                   <Button
-                    size="icon"
+                    size="icon-dense"
                     variant="ghost"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                    className="absolute right-1 top-1/2 -translate-y-1/2"
                     onClick={() => {
                       setSearchQuery('');
                       setSearchResults([]);
                     }}
                   >
-                    <X className="w-4 h-4" />
+                    <X className="size-4" />
                   </Button>
                 )}
               </div>
@@ -344,7 +350,7 @@ export function ShareDialog({ page }: ShareDialogProps) {
             {/* Search Results */}
             {isSearching && (
               <div className="flex items-center justify-center py-4">
-                <Loader2 className="w-5 h-5 animate-spin text-violet-500" />
+                <Loader2 className="size-5 animate-spin text-accent" />
                 <span className="ml-2 text-sm text-muted-foreground">{t('share.searching')}</span>
               </div>
             )}
@@ -352,23 +358,23 @@ export function ShareDialog({ page }: ShareDialogProps) {
             {!isSearching && searchResults.length > 0 && (
               <div className="space-y-2">
                 <Label className="text-sm text-muted-foreground">{t('share.search_results')}</Label>
-                <div className="space-y-1 max-h-[150px] overflow-y-auto">
+                <div className="max-h-[150px] space-y-1 overflow-y-auto">
                   {searchResults.map((user) => (
                     <div
                       key={user.id}
-                      className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800"
+                      className="flex items-center justify-between rounded-md p-2 hover:bg-subtle"
                     >
                       <div className="flex items-center gap-2">
                         {user.profile_image_url ? (
                           <img
                             src={user.profile_image_url}
                             alt={user.username}
-                            className="w-8 h-8 rounded-full"
+                            className="h-8 w-8 rounded-full border border-border object-cover"
                           />
                         ) : (
-                          <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-                            <span className="text-sm font-medium">
-                              {user.username[0].toUpperCase()}
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-subtle">
+                            <span className="text-xs font-medium text-accent">
+                              {avatarFallback(user.display_name, user.username)}
                             </span>
                           </div>
                         )}
@@ -376,11 +382,11 @@ export function ShareDialog({ page }: ShareDialogProps) {
                       </div>
                       <Button
                         size="sm"
+                        variant="primary"
                         onClick={() => handleGrant(user.id)}
                         disabled={grantPermissionMutation.isPending}
-                        className="gap-1 bg-violet-500 hover:bg-violet-600"
                       >
-                        <UserPlus className="w-3 h-3" />
+                        <UserPlus className="size-3" />
                         {t('share.add_collaborator')}
                       </Button>
                     </div>
@@ -390,7 +396,7 @@ export function ShareDialog({ page }: ShareDialogProps) {
             )}
 
             {!isSearching && searchQuery.length >= 2 && searchResults.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-4">
+              <p className="py-4 text-center text-sm text-muted-foreground">
                 {t('share.no_users_found')}
               </p>
             )}
@@ -400,30 +406,30 @@ export function ShareDialog({ page }: ShareDialogProps) {
               <Label className="text-sm text-muted-foreground">{t('share.current_collaborators')}</Label>
               {isLoadingPermissions ? (
                 <div className="flex items-center justify-center py-4">
-                  <Loader2 className="w-5 h-5 animate-spin text-violet-500" />
+                  <Loader2 className="size-5 animate-spin text-accent" />
                 </div>
               ) : permissions.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
+                <p className="py-4 text-center text-sm text-muted-foreground">
                   {t('share.no_collaborators')}
                 </p>
               ) : (
-                <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                <div className="max-h-[200px] space-y-1 overflow-y-auto">
                   {permissions.map((perm) => (
                     <div
                       key={perm.id}
-                      className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800"
+                      className="flex items-center justify-between rounded-md bg-subtle p-2"
                     >
                       <div className="flex items-center gap-2">
                         {perm.user.profile_image_url ? (
                           <img
                             src={perm.user.profile_image_url}
                             alt={perm.user.username}
-                            className="w-8 h-8 rounded-full"
+                            className="h-8 w-8 rounded-full border border-border object-cover"
                           />
                         ) : (
-                          <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-                            <span className="text-sm font-medium">
-                              {perm.user.username[0].toUpperCase()}
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-subtle">
+                            <span className="text-xs font-medium text-accent">
+                              {avatarFallback(perm.user.display_name, perm.user.username)}
                             </span>
                           </div>
                         )}
@@ -433,13 +439,13 @@ export function ShareDialog({ page }: ShareDialogProps) {
                           </span>
                           <div className="flex items-center gap-1">
                             {perm.can_edit ? (
-                              <Badge variant="secondary" className="text-xs gap-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                <ShieldCheck className="w-3 h-3" />
+                              <Badge variant="editor" className="text-xs gap-1">
+                                <ShieldCheck className="size-3" />
                                 {t('share.can_edit')}
                               </Badge>
                             ) : (
-                              <Badge variant="secondary" className="text-xs gap-1">
-                                <Shield className="w-3 h-3" />
+                              <Badge variant="viewer" className="text-xs gap-1">
+                                <Shield className="size-3" />
                                 {t('share.can_view')}
                               </Badge>
                             )}
@@ -452,18 +458,17 @@ export function ShareDialog({ page }: ShareDialogProps) {
                           variant="ghost"
                           onClick={() => handleUpdatePerm(perm.id, !perm.can_edit)}
                           disabled={updatePermissionMutation.isPending}
-                          className="text-xs"
                         >
                           {perm.can_edit ? t('share.can_view') : t('share.can_edit')}
                         </Button>
                         <Button
-                          size="icon"
-                          variant="ghost"
+                          size="icon-dense"
+                          variant="ghost-destructive"
                           onClick={() => handleRevoke(perm.id)}
                           disabled={revokePermissionMutation.isPending}
-                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          aria-label={t('share.revoke_access')}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="size-4" />
                         </Button>
                       </div>
                     </div>

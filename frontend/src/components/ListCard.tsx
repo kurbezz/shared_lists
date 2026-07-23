@@ -6,10 +6,10 @@ import { apiClient } from '@/api/client';
 import { parseValidationErrors, getValidationFromError } from '@/lib/validation';
 import useServerErrors from '@/hooks/useServerErrors';
 import { ListItem } from './ListItem';
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,11 +20,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuCheckboxItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Check, X, Loader2, GripVertical } from 'lucide-react';
+import { Plus, GripVertical, Settings } from 'lucide-react';
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { cn } from '@/lib/utils';
 
 interface ListCardProps {
   list: List;
@@ -69,6 +78,10 @@ export function ListCard({ list, canEdit, onUpdate, onDelete, dragHandleProps, e
     queryFn: () => apiClient.getListItems(list.id),
     select: (data) => [...data].sort((a, b) => a.position - b.position),
   });
+
+  const totalCount = items.length;
+  const completedCount = items.filter((i) => i.checked).length;
+  const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   const addItemMutation = useMutation({
     mutationFn: (content: string) => apiClient.createListItem(list.id, { content }),
@@ -176,6 +189,16 @@ export function ListCard({ list, canEdit, onUpdate, onDelete, dragHandleProps, e
     setIsEditing(false);
   };
 
+  const handleToggleShowCheckBoxes = async (value: boolean) => {
+    setShowCheckBoxes(value);
+    await onUpdate(list.id, { show_checkboxes: value });
+  };
+
+  const handleToggleShowProgress = async (value: boolean) => {
+    setShowProgress(value);
+    await onUpdate(list.id, { show_progress: value });
+  };
+
   const handleAddItem = () => {
     if (!newItemContent.trim()) return;
     clearAddItemErrors();
@@ -248,6 +271,7 @@ export function ListCard({ list, canEdit, onUpdate, onDelete, dragHandleProps, e
         <ListItem
           item={item}
           canEdit={canEdit}
+          showCheckbox={showCheckBoxes}
           onUpdate={handleUpdateItem}
           onDelete={handleDeleteItem}
           dragHandleProps={listeners}
@@ -259,131 +283,118 @@ export function ListCard({ list, canEdit, onUpdate, onDelete, dragHandleProps, e
 
   return (
     <>
-      <Card className="w-full lg:w-[320px] lg:flex-shrink-0 flex flex-col max-h-[70vh] min-h-[200px] bg-white dark:bg-slate-800 shadow-md border-t-4 border-t-violet-500 rounded-xl overflow-hidden">
-        <CardHeader className="p-4 pb-3 space-y-0 relative group bg-slate-50 dark:bg-slate-800/50">
-          {canEdit && dragHandleProps && (
-            <div
-              {...dragHandleProps}
-              className="absolute left-2 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity"
-            >
-              <GripVertical className="w-5 h-5" />
-            </div>
-          )}
-
+      <Card className="group flex w-[320px] shrink-0 flex-col max-h-[calc(100vh-180px)]">
+        <div className="flex items-center gap-1.5 border-b border-border px-2 py-2">
           {isEditing ? (
-            <div className="flex flex-col gap-3">
-              <div className="flex gap-1 items-center">
-                   <Input
-                     value={editTitle}
-                     onChange={(e) => {
-                       setEditTitle(e.target.value);
-                       if (onClearField) onClearField('title')(e);
-                     }}
-                    onKeyDown={handleTitleKeyDown}
-                    onBlur={handleUpdateTitle}
-                    autoFocus
-                    className="h-9 font-semibold text-base"
-                  />
-                {error && <p className="text-sm text-destructive mt-1">{error}</p>}
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-9 w-9"
-                  onClick={handleUpdateTitle}
-                  onMouseDown={(e) => e.preventDefault()}
-                >
-                  <Check className="h-4 w-4" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-9 w-9 text-destructive hover:text-destructive"
-                  onClick={handleCancelEdit}
-                  onMouseDown={(e) => e.preventDefault()}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-
-              <div className="flex flex-col gap-2 text-sm">
-                <label
-                  className="flex items-center gap-2 cursor-pointer"
-                  onMouseDown={(e) => e.preventDefault()}
-                >
-                  <Checkbox
-                    checked={showCheckBoxes}
-                    onCheckedChange={(v) => setShowCheckBoxes(!!v)}
-                    className="data-[state=checked]:bg-violet-500 data-[state=checked]:border-violet-500"
-                  />
-                  <span className="text-slate-600 dark:text-slate-400">
-                    {t('list.show_checkboxes_on_public')}
-                  </span>
-                </label>
-                <label
-                  className="flex items-center gap-2 cursor-pointer"
-                  onMouseDown={(e) => e.preventDefault()}
-                >
-                  <Checkbox
-                    checked={showProgress}
-                    onCheckedChange={(v) => setShowProgress(!!v)}
-                    className="data-[state=checked]:bg-violet-500 data-[state=checked]:border-violet-500"
-                  />
-                  <span className="text-slate-600 dark:text-slate-400">
-                    {t('list.show_progress_on_public')}
-                  </span>
-                </label>
-              </div>
+            <div className="flex flex-1 flex-col">
+              <Input
+                value={editTitle}
+                onChange={(e) => {
+                  setEditTitle(e.target.value);
+                  if (onClearField) onClearField('title')(e);
+                }}
+                onKeyDown={handleTitleKeyDown}
+                onBlur={handleUpdateTitle}
+                autoFocus
+                className="h-7 flex-1 text-sm font-medium"
+              />
+              {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
             </div>
           ) : (
-            <div className="flex items-center justify-between">
+            <>
+              {canEdit && dragHandleProps && (
+                <div
+                  {...dragHandleProps}
+                  aria-roledescription="sortable"
+                  className={cn(
+                    "cursor-grab text-muted-foreground opacity-0 transition-opacity active:cursor-grabbing group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100",
+                    dragHandleProps.className
+                  )}
+                >
+                  <GripVertical className="size-3.5" />
+                </div>
+              )}
+
               <h3
-                className="font-semibold text-base truncate cursor-pointer py-1 px-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded flex-1 mr-2 text-slate-900 dark:text-white"
+                className="flex-1 truncate px-1 text-sm font-medium"
                 onDoubleClick={() => canEdit && setIsEditing(true)}
                 title={list.title}
               >
                 {list.title}
               </h3>
-              {canEdit && (
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 text-slate-400 hover:text-violet-600"
-                    onClick={() => setIsEditing(true)}
-                    title={t('list.edit_title_hint')}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 text-slate-400 hover:text-destructive"
-                    onClick={() => setIsDeleteOpen(true)}
-                    title={t('list.delete_list_hint')}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-        </CardHeader>
 
-        <CardContent className="flex-1 overflow-y-auto p-3 min-h-[60px] space-y-1">
+              <Badge variant="counter">
+                {showProgress && totalCount > 0 ? `${completedCount}/${totalCount}` : totalCount}
+              </Badge>
+
+              {canEdit && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon-dense" aria-label={t('common.edit')}>
+                      <Settings className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuCheckboxItem
+                      checked={showCheckBoxes}
+                      onCheckedChange={(v) => handleToggleShowCheckBoxes(!!v)}
+                    >
+                      {t('list.show_checkboxes_on_public')}
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem
+                      checked={showProgress}
+                      onCheckedChange={(v) => handleToggleShowProgress(!!v)}
+                    >
+                      {t('list.show_progress_on_public')}
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setIsEditing(true)}>
+                      {t('list.edit_title_hint')}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem variant="destructive" onClick={() => setIsDeleteOpen(true)}>
+                      {t('list.delete_list_hint')}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </>
+          )}
+        </div>
+
+        {showProgress && !isLoading && totalCount > 0 && (
+          <div className="border-b border-border px-3 py-2">
+            <div
+              className="h-1.5 w-full rounded-full bg-subtle"
+              role="progressbar"
+              aria-valuenow={completedCount}
+              aria-valuemin={0}
+              aria-valuemax={totalCount}
+              aria-label={t('list.show_progress_on_public')}
+            >
+              <div
+                className="h-full rounded-full bg-accent-solid transition-[width] duration-300 ease-out"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="flex-1 space-y-0.5 overflow-y-auto p-1.5">
           {isLoading ? (
-            <div className="space-y-2 p-2">
-              <div className="h-10 bg-slate-100 dark:bg-slate-700 rounded animate-pulse" />
-              <div className="h-10 bg-slate-100 dark:bg-slate-700 rounded animate-pulse" />
-              <div className="h-10 bg-slate-100 dark:bg-slate-700 rounded animate-pulse" />
+            <div className="space-y-0.5 p-1.5">
+              <div className="h-9 rounded bg-subtle animate-pulse" />
+              <div className="h-9 rounded bg-subtle animate-pulse" />
+              <div className="h-9 rounded bg-subtle animate-pulse" />
             </div>
           ) : items.length === 0 ? (
-            <div className="text-center text-slate-400 dark:text-slate-500 py-8 text-sm italic">
+            <div className="px-3 py-2 text-[13px] text-muted-foreground">
               {t('list.empty')}
             </div>
           ) : (
             <DndContext onDragEnd={handleItemsDragEnd} collisionDetection={closestCenter}>
               <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-1">
+                <div className="space-y-0.5">
                   {items.map((item) => (
                     <SortableItem key={item.id} item={item} />
                   ))}
@@ -391,41 +402,30 @@ export function ListCard({ list, canEdit, onUpdate, onDelete, dragHandleProps, e
               </SortableContext>
             </DndContext>
           )}
-        </CardContent>
+        </div>
 
         {canEdit && (
-          <CardFooter className="p-3 pt-2 border-t border-slate-100 dark:border-slate-700">
-            <div className="flex gap-2 w-full">
-                <div className="flex-1">
-                  <Input
-                    value={newItemContent}
-                    onChange={(e) => {
-                      setNewItemContent(e.target.value);
-                      if (onChangeClearAddItem) onChangeClearAddItem('content')(e);
-                    }}
-                    onKeyDown={handleKeyDown}
-                    placeholder={t('list.add_item_placeholder')}
-                    disabled={addItemMutation.isPending}
-                    className="h-9"
-                  />
-                  {addItemErrors['content'] && (
-                    <p className="text-sm text-destructive mt-1">{addItemErrors['content']}</p>
-                  )}
-                </div>
-              <Button
-                size="icon"
-                onClick={handleAddItem}
-                disabled={addItemMutation.isPending || !newItemContent.trim()}
-                className="h-9 w-9 shrink-0 bg-violet-500 hover:bg-violet-600"
-              >
-                {addItemMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Plus className="h-4 w-4" />
+          <div className="border-t border-border p-1.5">
+            <div className="flex items-center gap-2">
+              <Plus className="size-4 shrink-0 text-muted-foreground" />
+              <div className="flex flex-1 flex-col">
+                <Input
+                  value={newItemContent}
+                  onChange={(e) => {
+                    setNewItemContent(e.target.value);
+                    if (onChangeClearAddItem) onChangeClearAddItem('content')(e);
+                  }}
+                  onKeyDown={handleKeyDown}
+                  placeholder={t('list.add_item_placeholder')}
+                  disabled={addItemMutation.isPending}
+                  className="h-8 border-transparent text-sm hover:border-border focus:border-accent"
+                />
+                {addItemErrors['content'] && (
+                  <p className="mt-1 text-xs text-destructive">{addItemErrors['content']}</p>
                 )}
-              </Button>
+              </div>
             </div>
-          </CardFooter>
+          </div>
         )}
       </Card>
 
@@ -442,7 +442,6 @@ export function ListCard({ list, canEdit, onUpdate, onDelete, dragHandleProps, e
                 setIsDeleteOpen(false);
                 await onDelete(list.id);
               }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {t('common.delete')}
             </AlertDialogAction>

@@ -38,8 +38,8 @@ const queryClient = new QueryClient({
 
 function LoadingScreen() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      <Loader2 className="h-12 w-12 animate-spin text-violet-500" />
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <Loader2 className="size-8 animate-spin text-accent" />
     </div>
   );
 }
@@ -134,7 +134,7 @@ export default function App() {
           <Suspense fallback={<LoadingScreen />}>
             <AppRoutes />
           </Suspense>
-          <Toaster position="top-right" richColors />
+          <Toaster position="top-right" richColors={false} />
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

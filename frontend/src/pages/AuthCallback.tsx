@@ -32,10 +32,12 @@ export function AuthCallback() {
   }, [searchParams, login, navigate]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background">
-      <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-      <h1 className="text-xl font-semibold">{t("auth.callback_title")}</h1>
-      <p className="text-muted-foreground">{t("auth.callback_desc")}</p>
-    </div>
+    <main className="grid min-h-screen place-items-center px-4">
+      <div className="space-y-3 text-center">
+        <Loader2 className="mx-auto size-6 animate-spin text-accent" />
+        <p className="text-sm font-medium">{t("auth.callback_title")}</p>
+        <p className="text-xs text-muted-foreground">{t("auth.callback_desc")}</p>
+      </div>
+    </main>
   );
 }

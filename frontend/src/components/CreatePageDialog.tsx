@@ -129,7 +129,7 @@ export default function CreatePageDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={className ?? "sm:max-w-[425px]"}>
+      <DialogContent className={className ?? "sm:max-w-md"}>
         <DialogHeader>
           <DialogTitle>Create new page</DialogTitle>
           <DialogDescription>
@@ -157,7 +157,7 @@ export default function CreatePageDialog({
               }}
             />
             {errors["title"] && (
-              <p className="text-sm text-destructive mt-1">{errors["title"]}</p>
+              <p className="text-xs text-destructive mt-1">{errors["title"]}</p>
             )}
           </div>
 
@@ -179,7 +179,7 @@ export default function CreatePageDialog({
               }}
             />
             {errors["description"] && (
-              <p className="text-sm text-destructive mt-1">{errors["description"]}</p>
+              <p className="text-xs text-destructive mt-1">{errors["description"]}</p>
             )}
           </div>
         </div>
@@ -191,7 +191,7 @@ export default function CreatePageDialog({
            <Button
             onClick={() => form.handleSubmit?.()}
             disabled={!form.getFieldValue('title')?.trim() || isPending}
-            className="bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700"
+            variant="primary"
           >
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {submitText}

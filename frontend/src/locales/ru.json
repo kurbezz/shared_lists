@@ -51,7 +51,7 @@
     },
     "dashboard": {
         "title": "Мои страницы",
-        "welcome": "Привет, {{name}}! 👋",
+        "welcome": "Привет, {{name}}",
         "logout": "Выйти",
         "settings": "Настройки",
         "create_page": "Создать страницу",
@@ -70,8 +70,8 @@
         "label_description": "Описание",
         "placeholder_title": "например, Мой список",
         "placeholder_description": "Необязательно",
-        "role_editor": "РЕДАКТОР",
-        "role_viewer": "ЗРИТЕЛЬ"
+        "role_editor": "Редактор",
+        "role_viewer": "Зритель"
     },
     "login": {
         "title": "Shared Lists",
@@ -91,7 +91,7 @@
         "add_desc_placeholder": "Добавить описание...",
         "role_creator": "Создатель",
         "role_editor": "Редактор",
-        "role_viewer": "Только чтение",
+        "role_viewer": "Зритель",
         "delete_page": "Удалить",
         "new_list": "Новый список",
         "new_list_placeholder": "Название списка...",

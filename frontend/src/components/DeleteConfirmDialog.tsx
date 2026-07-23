@@ -82,7 +82,6 @@ export default function DeleteConfirmDialog({
           <AlertDialogCancel>{cancelText}</AlertDialogCancel>
           <AlertDialogAction
             onClick={handleConfirm}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             disabled={isBusy}
           >
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

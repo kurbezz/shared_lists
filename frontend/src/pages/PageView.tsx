@@ -25,7 +25,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { ChevronLeft, Trash2, Plus, Loader2, Check, ListTodo } from 'lucide-react';
+import { ChevronLeft, Trash2, Plus, Loader2 } from 'lucide-react';
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -304,186 +304,153 @@ export function PageView() {
 
   if (!page) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-        <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
+      <div className="flex items-center justify-center h-screen bg-background">
+        <Loader2 className="size-8 animate-spin text-accent" />
       </div>
     );
   }
 
   return (
-    <div className="h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex flex-col">
+    <div className="h-screen bg-background flex flex-col">
       {/* Header */}
-      <header className="sticky top-0 z-10 border-b bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
-        <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1 space-y-2">
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleBack}
-                  title={t('page.back_to_pages')}
-                  className="shrink-0"
+      <header className="border-b border-border bg-background">
+        <div className="flex items-start gap-3 px-4 py-3 md:px-6">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleBack}
+            aria-label={t('page.back_to_pages')}
+            className="mt-0.5 shrink-0"
+          >
+            <ChevronLeft className="size-5" />
+          </Button>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              {isEditingTitle ? (
+                <div className="min-w-0 flex-1">
+                  <Input
+                    value={editPageTitle}
+                    onChange={(e) => {
+                      setEditPageTitle(e.target.value);
+                      if (onChangeClearPage) onChangeClearPage('title')(e);
+                    }}
+                    onKeyDown={handleKeyDownTitle}
+                    onBlur={handleUpdatePageTitle}
+                    autoFocus
+                    className="text-xl font-semibold h-9"
+                  />
+                  {pageErrors['title'] && (
+                    <p className="text-xs text-destructive mt-1">{pageErrors['title']}</p>
+                  )}
+                </div>
+              ) : (
+                <h1
+                  className="min-w-0 truncate text-xl font-semibold tracking-[-0.01em] cursor-pointer"
+                  onDoubleClick={() => page.can_edit && setIsEditingTitle(true)}
+                  title={page.can_edit ? t('page.edit_title_hint') : page.title}
                 >
-                  <ChevronLeft className="w-5 h-5" />
-                </Button>
-
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/20 shrink-0">
-                    <ListTodo className="w-5 h-5 text-white" />
-                  </div>
-
-                  {isEditingTitle ? (
-                    <div className="flex items-center gap-2 flex-1 max-w-lg">
-                       <Input
-                         value={editPageTitle}
-                         onChange={(e) => {
-                          setEditPageTitle(e.target.value);
-                            if (onChangeClearPage) onChangeClearPage('title')(e);
-                         }}
-                         onKeyDown={handleKeyDownTitle}
-                         onBlur={handleUpdatePageTitle}
-                         autoFocus
-                         className="text-xl font-bold h-10"
-                       />
-                       {pageErrors['title'] && <p className="text-sm text-destructive mt-1">{pageErrors['title']}</p>}
-
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-10 w-10"
-                        onClick={handleUpdatePageTitle}
-                        onMouseDown={(e) => e.preventDefault()}
-                      >
-                        <Check className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <h1
-                      className="text-xl sm:text-2xl font-bold cursor-pointer hover:text-violet-600 transition-colors truncate max-w-md"
-                      onDoubleClick={() => page.can_edit && setIsEditingTitle(true)}
-                      title={page.can_edit ? t('page.edit_title_hint') : page.title}
-                    >
-                      {page.title}
-                    </h1>
-                  )}
-                </div>
-              </div>
-
-              <div className="pl-[52px] sm:pl-[76px]">
-                {isEditingDesc ? (
-                  <div className="flex items-start gap-2 max-w-lg">
-                      <Textarea
-                       value={editPageDesc}
-                       onChange={(e) => { setEditPageDesc(e.target.value); if (onChangeClearPage) onChangeClearPage('description')(e); }}
-                      onKeyDown={handleKeyDownDesc}
-                      onBlur={handleUpdatePageDescription}
-                      autoFocus
-                      rows={2}
-                      placeholder={t('page.add_desc_placeholder')}
-                      className="min-h-[60px]"
-                    />
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8"
-                      onClick={handleUpdatePageDescription}
-                      onMouseDown={(e) => e.preventDefault()}
-                    >
-                      <Check className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  <p
-                    className="text-slate-500 dark:text-slate-400 cursor-pointer hover:text-slate-700 dark:hover:text-slate-300 transition-colors max-w-2xl text-sm"
-                    onDoubleClick={() => page.can_edit && setIsEditingDesc(true)}
-                    title={page.can_edit ? t('page.edit_desc_hint') : ''}
-                  >
-                    {page.description || (
-                      page.can_edit ? (
-                        <span className="italic opacity-50">{t('page.add_desc_placeholder')}</span>
-                      ) : null
-                    )}
-                  </p>
-                )}
-
-                <div className="mt-2 flex items-center gap-2">
-                  {page.is_creator ? (
-                    <Badge className="bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 hover:bg-violet-100">
-                      {t('page.role_creator')}
-                    </Badge>
-                  ) : page.can_edit ? (
-                    <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-100">
-                      {t('page.role_editor')}
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline">{t('page.role_viewer')}</Badge>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              {page.is_creator && (
-                <>
-                  <ShareDialog page={page} />
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="sm" className="gap-2">
-                        <Trash2 className="w-4 h-4" />
-                        <span className="hidden sm:inline">{t('page.delete_page')}</span>
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>{t('dashboard.delete_confirm_title')}</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          {t('dashboard.delete_confirm_description')}
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={handleDeletePage}
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                          {t('common.delete')}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </>
+                  {page.title}
+                </h1>
               )}
-              <UserMenu />
+              {page.is_creator ? (
+                <Badge variant="creator">{t('page.role_creator')}</Badge>
+              ) : page.can_edit ? (
+                <Badge variant="editor">{t('page.role_editor')}</Badge>
+              ) : (
+                <Badge variant="viewer">{t('page.role_viewer')}</Badge>
+              )}
             </div>
+            {isEditingDesc ? (
+              <div className="mt-0.5">
+                <Textarea
+                  value={editPageDesc}
+                  onChange={(e) => {
+                    setEditPageDesc(e.target.value);
+                    if (onChangeClearPage) onChangeClearPage('description')(e);
+                  }}
+                  onKeyDown={handleKeyDownDesc}
+                  onBlur={handleUpdatePageDescription}
+                  autoFocus
+                  rows={2}
+                  placeholder={t('page.add_desc_placeholder')}
+                  className="min-h-[60px] text-[13px]"
+                />
+                {pageErrors['description'] && (
+                  <p className="text-xs text-destructive mt-1">{pageErrors['description']}</p>
+                )}
+              </div>
+            ) : (
+              <p
+                className="mt-0.5 text-[13px] text-secondary-foreground cursor-pointer"
+                onDoubleClick={() => page.can_edit && setIsEditingDesc(true)}
+                title={page.can_edit ? t('page.edit_desc_hint') : ''}
+              >
+                {page.description || (
+                  page.can_edit ? (
+                    <span className="text-muted-foreground">{t('page.add_desc_placeholder')}</span>
+                  ) : null
+                )}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {page.is_creator && <ShareDialog page={page} />}
+            {page.is_creator && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost-destructive"
+                    size="icon-dense"
+                    aria-label={t('page.delete_page')}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>{t('dashboard.delete_confirm_title')}</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {t('dashboard.delete_confirm_description')}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeletePage}>
+                      {t('common.delete')}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+            <UserMenu />
           </div>
         </div>
       </header>
 
       {/* Lists */}
       <main className="flex-1 overflow-hidden min-h-0">
-        <div className="h-full overflow-x-auto overflow-y-auto p-4 sm:p-6">
+        <div className="h-full overflow-x-auto p-4 md:p-6">
           <DndContext onDragEnd={handleListsDragEnd} collisionDetection={closestCenter}>
             <SortableContext items={lists.map((l) => l.id)} strategy={horizontalListSortingStrategy}>
-              <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-start pb-4">
+              <div className="flex items-start gap-3 pb-4">
                 {isListsLoading ? (
-                  <div className="flex gap-4">
+                  <>
                     {[1, 2, 3].map((i) => (
                       <div
                         key={i}
-                        className="w-full lg:w-[320px] h-[200px] bg-slate-100 dark:bg-slate-800 rounded-xl animate-pulse"
+                        className="w-[320px] h-[200px] rounded-lg bg-subtle animate-pulse"
                       />
                     ))}
-                  </div>
+                  </>
                 ) : (
                   lists.map((list) => <SortableListItem key={list.id} list={list} />)
                 )}
 
                 {/* Add List Card */}
                 {page.can_edit && (
-                  <Card className="w-full lg:w-[320px] lg:flex-shrink-0 bg-slate-50/50 dark:bg-slate-800/30 border-dashed border-2 border-slate-200 dark:border-slate-700 shadow-none hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors">
+                  <Card className="w-[320px] shrink-0 border-dashed border-border-strong bg-transparent">
                     <CardContent className="p-4">
-                      <h3 className="font-semibold text-base mb-3 text-slate-700 dark:text-slate-300">
+                      <h3 className="text-sm font-medium text-muted-foreground mb-3">
                         {t('page.new_list')}
                       </h3>
                       <div className="flex gap-2">
@@ -493,18 +460,17 @@ export function PageView() {
                           onKeyDown={handleKeyDownNewList}
                           placeholder={t('page.new_list_placeholder')}
                           disabled={addListMutation.isPending}
-                          className="bg-white dark:bg-slate-800"
                         />
                         <Button
+                          variant="primary"
                           size="icon"
                           onClick={handleAddList}
                           disabled={addListMutation.isPending || !newListTitle.trim()}
-                          className="shrink-0 bg-violet-500 hover:bg-violet-600"
                         >
                           {addListMutation.isPending ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <Loader2 className="size-4 animate-spin" />
                           ) : (
-                            <Plus className="w-4 h-4" />
+                            <Plus className="size-4" />
                           )}
                         </Button>
                       </div>

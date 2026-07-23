@@ -4,29 +4,21 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { apiClient } from "@/api/client";
 import useServerErrors from '@/hooks/useServerErrors';
-import { useAuth } from "@/hooks/useAuth";
 import { UserMenu } from "@/components/UserMenu";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
-import {
-  Card,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 const CreatePageDialog = lazy(() => import("@/components/CreatePageDialog"));
 
 const DeleteConfirmDialog = lazy(
   () => import("@/components/DeleteConfirmDialog"),
 );
 import { toast } from "sonner";
-import { Plus, Trash2, Loader2, ArrowRight, ListTodo } from "lucide-react";
+import { Plus, Trash2, Loader2, ListTodo } from "lucide-react";
 
 export function Dashboard() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const queryClient = useQueryClient();
 
   const { data: pages = [], isLoading } = useQuery({
@@ -96,93 +88,78 @@ export function Dashboard() {
   const sharedPages = pages.filter((p) => !p.is_creator);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-10 border-b bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/20">
-                <ListTodo className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-slate-900 dark:text-white">
-                  {t("dashboard.title")}
-                </h1>
-                {user && (
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    {t("dashboard.welcome", {
-                      name: user.display_name || user.username,
-                    })}
-                  </p>
-                )}
-              </div>
-            </div>
-            <UserMenu />
+      <header className="sticky top-0 z-10 h-14 border-b border-border bg-background">
+        <div className="mx-auto flex h-full max-w-6xl items-center justify-between px-4 md:px-6">
+          <div className="flex items-center gap-2">
+            <ListTodo className="size-5 text-accent" />
+            <span className="text-[15px] font-semibold">{t("dashboard.title")}</span>
           </div>
+          <UserMenu />
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10">
-        {/* Actions Bar */}
-        {(createdPages.length > 0 || sharedPages.length > 0) && (
-          <div className="flex justify-end">
-            <Button
-              onClick={() => setIsCreateOpen(true)}
-              className="gap-2 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 shadow-lg shadow-violet-500/20"
-            >
-              <Plus className="w-4 h-4" />
-              {t("dashboard.create_page")}
-            </Button>
-          </div>
-        )}
-
+      <main className="mx-auto max-w-6xl space-y-8 px-4 py-6 md:px-6">
         {isLoading ? (
           <div className="flex justify-center py-20">
-            <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
+            <Loader2 className="size-8 animate-spin text-accent" />
           </div>
         ) : (
           <>
             {/* My Pages */}
             {createdPages.length > 0 && (
               <section className="space-y-4">
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                  {t("dashboard.my_pages", { count: createdPages.length })}
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-semibold">
+                      {t("dashboard.my_pages", { count: createdPages.length })}
+                    </h2>
+                  </div>
+                  <Button
+                    variant="primary"
+                    size="md"
+                    onClick={() => setIsCreateOpen(true)}
+                  >
+                    <Plus className="size-4" />
+                    {t("dashboard.create_page")}
+                  </Button>
+                </div>
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
                   {createdPages.map((page) => (
-                    <Card
+                    <div
                       key={page.id}
-                      className="group cursor-pointer transition-all hover:shadow-lg hover:shadow-violet-500/10 hover:-translate-y-1 border-l-4 border-l-violet-500 bg-white dark:bg-slate-800"
+                      className="group relative cursor-pointer rounded-lg border border-border bg-surface p-4 transition-[border-color,box-shadow] duration-150 hover:border-border-strong hover:shadow-sm"
                       onClick={() => navigate(`/pages/${page.id}`)}
                     >
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-lg line-clamp-1 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
+                      <div className="flex flex-col gap-2">
+                        <p className="truncate text-[15px] font-medium">
                           {page.title}
-                        </CardTitle>
-                        <CardDescription className="line-clamp-2 min-h-[2.5em]">
+                        </p>
+                        <p className="line-clamp-2 min-h-[36px] text-[13px] text-secondary-foreground">
                           {page.description || t("dashboard.no_description")}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardFooter className="flex justify-between items-center text-xs text-slate-500 pt-4">
-                        <span>
-                          {new Date(page.created_at).toLocaleDateString(
-                            i18n.language,
-                          )}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setPageToDelete(page.id);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </CardFooter>
-                    </Card>
+                        </p>
+                        <div className="mt-auto flex items-center justify-between pt-2">
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(page.created_at).toLocaleDateString(
+                              i18n.language,
+                            )}
+                          </span>
+                          <Button
+                            variant="ghost-destructive"
+                            size="icon-dense"
+                            className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+                            aria-label={t("common.delete")}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPageToDelete(page.id);
+                            }}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </section>
@@ -191,46 +168,43 @@ export function Dashboard() {
             {/* Shared Pages */}
             {sharedPages.length > 0 && (
               <section className="space-y-4">
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                  {t("dashboard.shared_with_me", { count: sharedPages.length })}
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-semibold">
+                      {t("dashboard.shared_with_me", { count: sharedPages.length })}
+                    </h2>
+                  </div>
+                </div>
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
                   {sharedPages.map((page) => (
-                    <Card
+                    <div
                       key={page.id}
-                      className="group cursor-pointer transition-all hover:shadow-lg hover:-translate-y-1 bg-white dark:bg-slate-800"
+                      className="group relative cursor-pointer rounded-lg border border-border bg-surface p-4 transition-[border-color,box-shadow] duration-150 hover:border-border-strong hover:shadow-sm"
                       onClick={() => navigate(`/pages/${page.id}`)}
                     >
-                      <CardHeader className="pb-2">
-                        <div className="flex justify-between items-start gap-2">
-                          <CardTitle className="text-lg line-clamp-1 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="truncate text-[15px] font-medium">
                             {page.title}
-                          </CardTitle>
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-semibold shrink-0 ${
-                              page.can_edit
-                                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                : "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400"
-                            }`}
-                          >
-                            {page.can_edit
-                              ? t("dashboard.role_editor")
-                              : t("dashboard.role_viewer")}
+                          </p>
+                          {page.can_edit ? (
+                            <Badge variant="editor">{t("dashboard.role_editor")}</Badge>
+                          ) : (
+                            <Badge variant="viewer">{t("dashboard.role_viewer")}</Badge>
+                          )}
+                        </div>
+                        <p className="line-clamp-2 min-h-[36px] text-[13px] text-secondary-foreground">
+                          {page.description || t("dashboard.no_description")}
+                        </p>
+                        <div className="mt-auto flex items-center justify-between pt-2">
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(page.created_at).toLocaleDateString(
+                              i18n.language,
+                            )}
                           </span>
                         </div>
-                        <CardDescription className="line-clamp-2 min-h-[2.5em]">
-                          {page.description || t("dashboard.no_description")}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardFooter className="flex justify-between items-center text-xs text-slate-500 pt-4">
-                        <span>
-                          {new Date(page.created_at).toLocaleDateString(
-                            i18n.language,
-                          )}
-                        </span>
-                        <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-violet-500" />
-                      </CardFooter>
-                    </Card>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </section>
@@ -238,24 +212,23 @@ export function Dashboard() {
 
             {/* Empty State */}
             {createdPages.length === 0 && sharedPages.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-20">
-                <div className="w-24 h-24 bg-gradient-to-br from-violet-100 to-purple-100 dark:from-violet-900/30 dark:to-purple-900/30 rounded-full flex items-center justify-center mb-6">
-                  <Plus className="h-12 w-12 text-violet-500" />
+              <div className="rounded-lg border border-dashed border-border-strong py-10">
+                <div className="flex flex-col items-center">
+                  <ListTodo className="size-8 text-muted-foreground" />
+                  <p className="mt-4 text-sm font-medium">{t("dashboard.no_pages")}</p>
+                  <p className="mt-1 max-w-sm text-center text-[13px] text-secondary-foreground">
+                    {t("dashboard.no_pages_description")}
+                  </p>
+                  <Button
+                    className="mt-4 gap-2"
+                    variant="primary"
+                    size="md"
+                    onClick={() => setIsCreateOpen(true)}
+                  >
+                    <Plus className="size-4" />
+                    {t("dashboard.create_page")}
+                  </Button>
                 </div>
-                <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
-                  {t("dashboard.no_pages")}
-                </h3>
-                <p className="text-slate-500 dark:text-slate-400 mb-8 max-w-sm text-center">
-                  {t("dashboard.no_pages_description")}
-                </p>
-                <Button
-                  onClick={() => setIsCreateOpen(true)}
-                  size="lg"
-                  className="gap-2 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 shadow-lg shadow-violet-500/20"
-                >
-                  <Plus className="w-5 h-5" />
-                  {t("dashboard.create_page")}
-                </Button>
               </div>
             )}
           </>

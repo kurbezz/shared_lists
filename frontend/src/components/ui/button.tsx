@@ -12,8 +12,8 @@ import { cn } from "@/lib/utils";
 
 function Button({
   className,
-  variant = "default",
-  size = "default",
+  variant = "primary",
+  size = "md",
   asChild = false,
   ...props
 }: React.ComponentProps<"button"> &

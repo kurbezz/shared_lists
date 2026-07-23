@@ -1,39 +1,46 @@
-// Shared variants for the Button UI primitive.
+// Shared variants for the Button UI primitive (DESIGN.md §10.1).
 //
-// Keeping this in a separate file prevents the `react-refresh/only-export-components`
+// Kept in a separate file to avoid the `react-refresh/only-export-components`
 // ESLint error (fast refresh expects files that export only React components).
 import { cva, type VariantProps } from "class-variance-authority";
 
 export const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+  // Base (DESIGN.md §10.1): single row, nowrap, functional transitions only.
+  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-medium transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        // Solid accent fill — primary actions.
+        primary:
+          "bg-accent-solid text-accent-foreground hover:bg-accent-solid-hover active:bg-accent-solid-hover",
         destructive:
-          "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
+          "bg-destructive text-white hover:bg-destructive-hover active:bg-destructive-hover",
         outline:
-          "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
+          "border border-input-border bg-surface text-foreground hover:bg-subtle active:bg-subtle",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+          "bg-subtle text-foreground hover:bg-border active:bg-border",
         ghost:
-          "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
-        link: "text-primary underline-offset-4 hover:underline",
+          "text-secondary-foreground hover:bg-subtle hover:text-foreground active:bg-subtle",
+        // Icon-only destructive (hover-reveal delete on rows/cards).
+        "ghost-destructive":
+          "text-muted-foreground hover:bg-destructive-subtle hover:text-destructive active:bg-destructive-subtle",
+        link: "h-auto px-0 text-accent underline-offset-4 hover:underline",
+        // Single brand exception — Twitch login button only (DESIGN.md §3.4).
+        twitch: "bg-twitch text-white hover:bg-twitch-hover active:bg-twitch-hover",
       },
       size: {
-        default: "h-9 px-4 py-2 has-[>svg]:px-3",
-        sm: "h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
-        lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
-        icon: "size-9",
-        "icon-sm": "size-8",
-        "icon-lg": "size-10",
+        sm: "h-8 px-3 text-[13px]",
+        md: "h-9 px-4 text-sm",
+        lg: "h-10 px-5 text-sm",
+        icon: "h-8 w-8",
+        "icon-dense": "h-7 w-7",
       },
     },
     defaultVariants: {
-      variant: "default",
-      size: "default",
+      variant: "primary",
+      size: "md",
     },
-  }
+  },
 );
 
 export type ButtonVariantProps = VariantProps<typeof buttonVariants>;

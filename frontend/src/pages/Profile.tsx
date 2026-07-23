@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useForm } from '@tanstack/react-form';
-// zod previously used for inline validate functions; validation now happens in handlers
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
@@ -9,7 +8,8 @@ import useServerErrors from '@/hooks/useServerErrors';
 import type { ApiKey } from '@/types';
 import { UserMenu } from '@/components/UserMenu';
 import { useAuth } from '@/hooks/useAuth';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -25,31 +25,29 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { ChevronLeft, Key, X, Loader2, Copy, Check, Trash2, Globe, ListTodo } from 'lucide-react';
+import { ChevronLeft, Key, X, Loader2, Copy, Check, Trash2, ShieldCheck } from 'lucide-react';
 
 export function Profile() {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
-  const /* currentLang intentionally unused */ _currentLang = i18n.language || 'en';
+  const _currentLang = i18n.language || 'en';
 
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [loadingKeys, setLoadingKeys] = useState(false);
   const { user, refreshUser } = useAuth();
+  const [imgError, setImgError] = useState(false);
 
-  // profile form is the single source of truth for these values
-  // local state removed in favor of profileForm
   const profileForm = useForm({
     defaultValues: {
       display_name: '',
       profile_image_url: '',
       email: '',
     },
-    // keep validation in submit handlers via zod
   });
   const profileServerErrors = useServerErrors();
   const { errors: profileErrors, setFrom: setProfileErrorsFrom, clear: clearProfileErrors, onChangeClear: onChangeClearProfile, applyToForm: applyProfileErrorsToForm } = profileServerErrors;
-  // API key creation form is fully controlled by TanStack form
+
   const createKeyForm = useForm({
     defaultValues: {
       name: '',
@@ -63,6 +61,13 @@ export function Profile() {
   const [revokeId, setRevokeId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [copiedToken, setCopiedToken] = useState(false);
+
+  const profileImageUrl = profileForm.getFieldValue('profile_image_url') ?? '';
+  const displayName = profileForm.getFieldValue('display_name') ?? '';
+
+  useEffect(() => {
+    setImgError(false);
+  }, [profileImageUrl]);
 
   const handleLangChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const lang = e.target.value;
@@ -95,16 +100,12 @@ export function Profile() {
     }
   }, [user, profileForm]);
 
-  // apply server errors into forms
   useEffect(() => {
     applyProfileErrorsToForm?.(profileForm);
   }, [profileErrors, applyProfileErrorsToForm, profileForm]);
   useEffect(() => {
     applyCreateKeyErrorsToForm?.(createKeyForm);
   }, [createErrors, applyCreateKeyErrorsToForm, createKeyForm]);
-
-  // keep form state in sync with local state
-  // local state removed; inputs now write directly to profileForm
 
   const handleCreate = async () => {
     const values = (createKeyForm.state as unknown as { values: Record<string, unknown> }).values as { name?: string; scopes?: string };
@@ -126,13 +127,11 @@ export function Profile() {
       } catch {
         // ignore clipboard errors
       }
-      // values cleared from the form instance below
       createKeyForm.setFieldValue('name', '');
       createKeyForm.setFieldValue('scopes', '');
       fetchKeys();
     } catch (err) {
       console.error('Create API key failed:', err);
-      // Wire up validation errors if backend provided them
       if (err instanceof Error) {
         const maybe = err as { validation?: unknown };
         if (maybe.validation) {
@@ -172,7 +171,6 @@ export function Profile() {
       } as unknown as { display_name?: string | null; profile_image_url?: string | null; email?: string | null };
       await apiClient.updateCurrentUser(payload);
       toast.success(t('profile.saved'));
-      // Refresh context user
       try {
         await refreshUser();
       } catch {
@@ -218,248 +216,260 @@ export function Profile() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-10 border-b bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate('/')}
-                className="shrink-0"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </Button>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/20">
-                  <ListTodo className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold text-slate-900 dark:text-white">
-                    {t('profile.title')}
-                  </h1>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    {t('profile.description')}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <UserMenu />
-          </div>
+      <header className="sticky top-0 z-10 h-14 border-b border-border bg-background">
+        <div className="mx-auto flex h-full max-w-2xl items-center justify-between px-4 md:px-6">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/')}
+            aria-label={t('page.back_to_pages')}
+            className="shrink-0"
+          >
+            <ChevronLeft className="size-5" />
+          </Button>
+          <UserMenu />
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        {/* Language Settings */}
-        <Card className="bg-white dark:bg-slate-800 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Globe className="w-5 h-5 text-violet-500" />
-              {t('profile.settings_title')}
-            </CardTitle>
+      <main className="mx-auto max-w-2xl px-4 py-6 md:px-6 space-y-6">
+        {/* Page heading */}
+        <h1 className="text-2xl font-semibold tracking-[-0.01em]">{t('profile.title')}</h1>
+
+        {/* Profile Card */}
+        <Card className="rounded-lg border border-border bg-surface">
+          <CardHeader className="border-b border-border p-4">
+            <CardTitle>{t('profile.settings_title')}</CardTitle>
+            <CardDescription className="mt-1">
+              {t('profile.description')}
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 max-w-sm">
-              <div className="grid gap-2">
-                <Label htmlFor="display_name">{t('label_display_name') || 'Display name'}</Label>
-                <Input
-                  id="display_name"
-                  value={profileForm.getFieldValue('display_name') ?? ''}
-                  onChange={(e) => {
-                    profileForm.setFieldValue('display_name', e.target.value);
-                    if (onChangeClearProfile) onChangeClearProfile('display_name')(e);
-                  }}
-                  placeholder={t('profile.label_display_name')}
+          <CardContent className="p-4 space-y-4">
+            {/* Avatar row */}
+            <div className="flex items-center gap-3">
+              {profileImageUrl && !imgError ? (
+                <img
+                  src={profileImageUrl}
+                  alt=""
+                  className="h-10 w-10 rounded-full border border-border object-cover"
+                  onError={() => setImgError(true)}
                 />
-                {profileErrors['display_name'] && <p className="text-sm text-destructive mt-1">{profileErrors['display_name']}</p>}
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="profile_image_url">{t('profile.label_profile_image') || 'Profile image URL'}</Label>
+              ) : (
+                <div className="h-10 w-10 rounded-full bg-accent-subtle flex items-center justify-center">
+                  <span className="text-accent font-medium text-sm">
+                    {(displayName || user?.display_name || '?').charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              )}
+              <div className="flex-1 grid gap-2">
+                <Label htmlFor="profile_image_url">{t('profile.label_profile_image')}</Label>
                 <Input
                   id="profile_image_url"
-                  value={profileForm.getFieldValue('profile_image_url') ?? ''}
+                  value={profileImageUrl}
                   onChange={(e) => {
                     profileForm.setFieldValue('profile_image_url', e.target.value);
                     if (onChangeClearProfile) onChangeClearProfile('profile_image_url')(e);
                   }}
-                  placeholder={t('profile.label_profile_image')}
+                  placeholder="https://static-cdn.jtvnw.net/jtv_user_pictures/…"
                 />
-                {profileErrors['profile_image_url'] && <p className="text-sm text-destructive mt-1">{profileErrors['profile_image_url']}</p>}
+                {profileErrors['profile_image_url'] && (
+                  <p className="text-xs text-destructive">{profileErrors['profile_image_url']}</p>
+                )}
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" value={profileForm.getFieldValue('email') ?? ''} onChange={(e) => { profileForm.setFieldValue('email', e.target.value); if (onChangeClearProfile) onChangeClearProfile('email')(e); }} placeholder="you@example.com" />
-                {profileErrors['email'] && <p className="text-sm text-destructive mt-1">{profileErrors['email']}</p>}
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="display_name">{t('profile.label_display_name')}</Label>
+              <Input
+                id="display_name"
+                value={profileForm.getFieldValue('display_name') ?? ''}
+                onChange={(e) => {
+                  profileForm.setFieldValue('display_name', e.target.value);
+                  if (onChangeClearProfile) onChangeClearProfile('display_name')(e);
+                }}
+                placeholder="streamer_max"
+              />
+              {profileErrors['display_name'] && (
+                <p className="text-xs text-destructive">{profileErrors['display_name']}</p>
+              )}
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="email">{t('profile.label_email', 'Email')}</Label>
+              <Input
+                id="email"
+                type="email"
+                value={profileForm.getFieldValue('email') ?? ''}
+                onChange={(e) => {
+                  profileForm.setFieldValue('email', e.target.value);
+                  if (onChangeClearProfile) onChangeClearProfile('email')(e);
+                }}
+                placeholder="anna.plays@gmail.com"
+              />
+              {profileErrors['email'] && (
+                <p className="text-xs text-destructive">{profileErrors['email']}</p>
+              )}
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="language">{t('profile.label_language', 'Language')}</Label>
+              <div className="relative">
+                <select
+                  id="language"
+                  onChange={handleLangChange}
+                  defaultValue={_currentLang}
+                  className="relative h-9 w-full appearance-none rounded-md border border-input-border bg-surface pl-3 pr-8 text-sm text-foreground focus-visible:outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/30"
+                >
+                  <option value="ru">Русский</option>
+                  <option value="en">English</option>
+                </select>
+                <ChevronLeft className="pointer-events-none absolute right-2 top-1/2 size-4 -translate-y-1/2 -rotate-90 text-muted-foreground" />
               </div>
-                <div className="flex gap-2">
-                 <Button onClick={handleSaveProfile} className="bg-violet-500 hover:bg-violet-600">{t('profile.save')}</Button>
-                 <select onChange={handleLangChange} defaultValue={_currentLang} className="border rounded px-2 py-1 text-sm">
-                   <option value="en">English</option>
-                   <option value="es">Español</option>
-                   <option value="fr">Français</option>
-                 </select>
-               </div>
             </div>
           </CardContent>
+          <CardFooter className="flex justify-end border-t border-border p-4">
+            <Button variant="primary" onClick={handleSaveProfile}>
+              {t('common.save')}
+            </Button>
+          </CardFooter>
         </Card>
 
-        {/* API Keys */}
-        <Card className="bg-white dark:bg-slate-800 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Key className="w-5 h-5 text-violet-500" />
-              {t('profile.api_keys_title')}
-            </CardTitle>
+        {/* API Keys Card */}
+        <Card className="rounded-lg border border-border bg-surface">
+          <CardHeader className="border-b border-border p-4">
+            <CardTitle>{t('profile.api_keys_title')}</CardTitle>
+            <CardDescription className="mt-1">
+              {t(
+                'profile.api_keys_subtitle',
+                'API keys give external applications access to your pages. Keep them like passwords.'
+              )}
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="p-4 space-y-4">
             {/* Create API Key Form */}
-            <div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="grid gap-2">
-                  <Label htmlFor="key-name">{t('profile.label_name')}</Label>
-                   <Input
-                     id="key-name"
-                     value={createKeyForm.getFieldValue('name') ?? ''}
-                      onChange={(e) => {
-                        createKeyForm.setFieldValue('name', e.target.value);
-                        if (onChangeClearCreate) onChangeClearCreate('name')(e);
-                      }}
-                     placeholder="My bot key"
-                   />
-                  {createErrors['name'] && (
-                    <p className="text-sm text-destructive mt-1">{createErrors['name']}</p>
-                  )}
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="key-scopes">{t('profile.label_scopes')}</Label>
-                    <Input
-                      id="key-scopes"
-                      value={createKeyForm.getFieldValue('scopes') ?? ''}
-                       onChange={(e) => {
-                          createKeyForm.setFieldValue('scopes', e.target.value);
-                          if (onChangeClearCreate) onChangeClearCreate('scopes')(e);
-                        }}
-                      placeholder="read,write"
-                    />
-                  {createErrors['scopes'] && (
-                    <p className="text-sm text-destructive mt-1">{createErrors['scopes']}</p>
-                  )}
-                </div>
+            <div className="p-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="grid gap-2 flex-1">
+                <Label htmlFor="key-name">{t('profile.label_name')}</Label>
+                <Input
+                  id="key-name"
+                  value={createKeyForm.getFieldValue('name') ?? ''}
+                  onChange={(e) => {
+                    createKeyForm.setFieldValue('name', e.target.value);
+                    if (onChangeClearCreate) onChangeClearCreate('name')(e);
+                  }}
+                  placeholder="Stream Bot"
+                />
+                {createErrors['name'] && (
+                  <p className="text-xs text-destructive">{createErrors['name']}</p>
+                )}
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">{t('profile.scopes_hint')}</p>
-              <Button
-                onClick={handleCreate}
-                disabled={creating}
-                className="bg-violet-500 hover:bg-violet-600"
-              >
-                {creating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              <div className="grid gap-2 flex-1">
+                <Label htmlFor="key-scopes">{t('profile.label_scopes')}</Label>
+                <Input
+                  id="key-scopes"
+                  value={createKeyForm.getFieldValue('scopes') ?? ''}
+                  onChange={(e) => {
+                    createKeyForm.setFieldValue('scopes', e.target.value);
+                    if (onChangeClearCreate) onChangeClearCreate('scopes')(e);
+                  }}
+                  placeholder="pages:read, pages:write"
+                />
+                {createErrors['scopes'] && (
+                  <p className="text-xs text-destructive">{createErrors['scopes']}</p>
+                )}
+              </div>
+              <Button variant="primary" onClick={handleCreate} disabled={creating}>
+                {creating ? <Loader2 className="size-4 animate-spin" /> : <Key className="size-4" />}
                 {t('profile.create_api_key')}
               </Button>
             </div>
 
             {/* Created Token Display */}
             {createdToken && (
-              <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <code className="block text-sm font-mono break-all bg-white dark:bg-slate-800 p-2 rounded border border-green-200 dark:border-green-700">
-                      {createdToken}
-                    </code>
-                    <p className="text-xs text-green-700 dark:text-green-400 mt-2">
-                      {t('profile.api_key_created_note')}
-                    </p>
-                  </div>
-                  <div className="flex gap-1 shrink-0">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={handleCopyToken}
-                      className="h-8 w-8"
-                    >
-                      {copiedToken ? (
-                        <Check className="w-4 h-4 text-green-500" />
-                      ) : (
-                        <Copy className="w-4 h-4" />
-                      )}
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => setCreatedToken(null)}
-                      className="h-8 w-8"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
+              <div className="rounded-md border border-accent bg-accent-subtle p-3">
+                <div className="flex items-center gap-1.5 text-[13px] font-medium">
+                  <ShieldCheck className="size-3.5 text-accent" />
+                  {t('profile.api_key_created_note')}
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <code className="flex-1 break-all rounded bg-surface px-2 py-1.5 font-mono text-[13px]">
+                    {createdToken}
+                  </code>
+                  <Button
+                    size="icon-dense"
+                    variant="ghost"
+                    onClick={handleCopyToken}
+                    aria-label={t('profile.copy_token', 'Copy token')}
+                  >
+                    {copiedToken ? <Check className="size-4" /> : <Copy className="size-4" />}
+                  </Button>
+                  <Button
+                    size="icon-dense"
+                    variant="ghost"
+                    onClick={() => setCreatedToken(null)}
+                    aria-label={t('profile.hide_token', 'Hide token')}
+                  >
+                    <X className="size-4" />
+                  </Button>
                 </div>
               </div>
             )}
 
             {/* API Keys List */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                {t('profile.your_api_keys')}
-              </h3>
-
+            <div className="divide-y divide-border">
               {loadingKeys ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-violet-500" />
+                  <Loader2 className="size-6 animate-spin text-accent" />
                 </div>
               ) : apiKeys.length === 0 ? (
-                <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-8">
-                  {t('profile.no_api_keys')}
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {apiKeys.map((k) => (
-                    <div
-                      key={k.id}
-                      className="flex items-center justify-between p-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-slate-900 dark:text-white">
-                            {k.name || '—'}
-                          </span>
-                          {k.revoked && (
-                            <Badge variant="destructive" className="text-xs">
-                              {t('profile.revoked')}
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                          {t('profile.scopes_label', { scopes: k.scopes.join(', ') || '—' })}
-                        </p>
-                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                          {t('profile.created', { date: new Date(k.created_at).toLocaleString() })}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        {!k.revoked ? (
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => setRevokeId(k.id)}
-                          >
-                            {t('profile.revoke')}
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeleteId(k.id)}
-                            className="h-8 w-8 text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <Key className="size-8 text-muted-foreground" />
+                  <p className="text-sm font-medium mt-3">{t('profile.no_api_keys')}</p>
+                  <p className="mt-1 text-[13px] text-secondary-foreground">
+                    {t('profile.scopes_hint')}
+                  </p>
                 </div>
+              ) : (
+                apiKeys.map((k) => (
+                  <div
+                    key={k.id}
+                    className={cn('flex items-center gap-3 px-4 py-3', k.revoked && 'opacity-60')}
+                  >
+                    <Key className="size-4 text-muted-foreground shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium">{k.name || '—'}</span>
+                        {k.scopes.map((scope) => (
+                          <Badge key={scope} variant="counter">
+                            {scope}
+                          </Badge>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {t('profile.created', { date: new Date(k.created_at).toLocaleString() })}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge variant={k.revoked ? 'revoked' : 'active'}>
+                        {k.revoked ? t('profile.revoked', 'Revoked') : t('profile.active', 'Active')}
+                      </Badge>
+                      {!k.revoked && (
+                        <Button variant="outline" size="sm" onClick={() => setRevokeId(k.id)}>
+                          {t('profile.revoke')}
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost-destructive"
+                        size="icon-dense"
+                        onClick={() => setDeleteId(k.id)}
+                        aria-label={t('profile.delete_key', 'Delete key')}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           </CardContent>
@@ -475,10 +485,7 @@ export function Profile() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleRevoke}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
+            <AlertDialogAction onClick={handleRevoke}>
               {t('profile.revoke')}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -494,10 +501,7 @@ export function Profile() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
+            <AlertDialogAction onClick={handleDelete}>
               {t('common.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>

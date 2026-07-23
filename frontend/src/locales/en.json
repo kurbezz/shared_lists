@@ -51,7 +51,7 @@
     },
     "dashboard": {
         "title": "My Pages",
-        "welcome": "Hi, {{name}}! 👋",
+        "welcome": "Hi, {{name}}",
         "logout": "Logout",
         "settings": "Settings",
         "create_page": "Create Page",
@@ -70,8 +70,8 @@
         "label_description": "Description",
         "placeholder_title": "e.g. My List",
         "placeholder_description": "Optional",
-        "role_editor": "EDITOR",
-        "role_viewer": "VIEWER"
+        "role_editor": "Editor",
+        "role_viewer": "Viewer"
     },
     "login": {
         "title": "Shared Lists",
@@ -91,7 +91,7 @@
         "add_desc_placeholder": "Add a description...",
         "role_creator": "Creator",
         "role_editor": "Editor",
-        "role_viewer": "Read only",
+        "role_viewer": "Viewer",
         "delete_page": "Delete",
         "new_list": "New list",
         "new_list_placeholder": "List title...",

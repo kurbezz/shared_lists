@@ -1,146 +1,175 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Shared Lists — design tokens (DESIGN.md §3).
+ * Warm stone-neutral base + single green accent. No gradients, no glow.
+ * Hardcoding hex in components is forbidden (§2.12) — only Twitch #9146FF
+ * on the login button is exempted.
+ */
 :root {
-    /* Calmer, slightly desaturated / pastel palette */
-    --background: oklch(0.985 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(0.985 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(0.985 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.54 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.56 0.12 25);
-    --destructive-foreground: oklch(0.985 0 0);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.66 0 0);
-    --chart-1: oklch(0.72 0.09 41);
-    --chart-2: oklch(0.68 0.07 184);
-    --chart-3: oklch(0.64 0.06 227);
-    --chart-4: oklch(0.78 0.08 84);
-    --chart-5: oklch(0.75 0.08 70);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.66 0 0);
+  /* Surfaces */
+  --background: #fafaf9; /* stone-50  — page background */
+  --surface: #ffffff; /* cards, inputs */
+  --elevated: #ffffff; /* menus, dialogs, toasts (+ shadow-md) */
+  --subtle: #f5f5f4; /* stone-100 — hover bg, badges, progress track */
+
+  /* Borders */
+  --border: #e7e5e4; /* stone-200 — card borders, dividers */
+  --border-strong: #d6d3d1; /* stone-300 — hover borders, dashed placeholders */
+  --input-border: #a8a29e; /* stone-400 — interactive control borders */
+
+  /* Text */
+  --foreground: #1c1917; /* stone-900 — primary text */
+  --secondary-foreground: #57534e; /* stone-600 — descriptions, secondary */
+  --muted-foreground: #78716c; /* stone-500 — dates, placeholders, captions */
+
+  /* Accent (green) */
+  --accent: #15803d; /* green-700 — text, icons, focus borders */
+  --accent-solid: #15803d; /* primary buttons, checkboxes, progress fill */
+  --accent-solid-hover: #166534; /* green-800 */
+  --accent-foreground: #ffffff; /* text on accent fill */
+  --accent-subtle: #f0fdf4; /* green-50 — accent badge/banner bg */
+
+  /* Semantic */
+  --destructive: #dc2626; /* red-600 */
+  --destructive-hover: #b91c1c; /* red-700 */
+  --destructive-subtle: #fef2f2; /* red-50 */
+  --warning: #b45309; /* amber-700 — text/icons only */
+  --warning-subtle: #fffbeb; /* amber-50 */
+  --info: #1d4ed8; /* blue-700 — Editor badge */
+  --info-subtle: #eff6ff; /* blue-50 */
+
+  /* Single brand exception — Twitch login button only */
+  --twitch: #9146ff;
+  --twitch-hover: #7c35e8;
 }
 
 .dark {
-    /* Calmer (desaturated) dark theme */
-    --background: oklch(0.17 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.235 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.235 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.64 0.12 25);
-    --destructive-foreground: oklch(0.985 0 0);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.52 0 0);
-    --chart-1: oklch(0.57 0.12 264);
-    --chart-2: oklch(0.66 0.09 162);
-    --chart-3: oklch(0.69 0.1 70);
-    --chart-4: oklch(0.61 0.11 303.9);
-    --chart-5: oklch(0.6 0.1 16);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.57 0.12 264);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.52 0 0);
+  --background: #0f0e0d;
+  --surface: #171512;
+  --elevated: #201d1a; /* floating layers lighter than bg + shadow-md */
+  --subtle: #26231f;
+
+  --border: #2c2925;
+  --border-strong: #403b35;
+  --input-border: #57534e;
+
+  --foreground: #edebe8;
+  --secondary-foreground: #b8b3ac;
+  --muted-foreground: #8a847c;
+
+  --accent: #4ade80; /* green-400 — text/icons/focus on dark */
+  --accent-solid: #16a34a; /* green-600 — fill (contrast with white text) */
+  --accent-solid-hover: #15803d;
+  --accent-foreground: #ffffff;
+  --accent-subtle: rgba(34, 197, 94, 0.14);
+
+  --destructive: #ef4444; /* red-500 */
+  --destructive-hover: #dc2626;
+  --destructive-subtle: rgba(239, 68, 68, 0.14);
+  --warning: #f59e0b; /* amber-500 */
+  --warning-subtle: rgba(245, 158, 11, 0.14);
+  --info: #60a5fa; /* blue-400 */
+  --info-subtle: rgba(96, 165, 250, 0.14);
+
+  --twitch: #9146ff;
+  --twitch-hover: #a875ff;
 }
 
 @theme inline {
-    --color-background: var(--background);
-    --color-foreground: var(--foreground);
-    --color-card: var(--card);
-    --color-card-foreground: var(--card-foreground);
-    --color-popover: var(--popover);
-    --color-popover-foreground: var(--popover-foreground);
-    --color-primary: var(--primary);
-    --color-primary-foreground: var(--primary-foreground);
-    --color-secondary: var(--secondary);
-    --color-secondary-foreground: var(--secondary-foreground);
-    --color-muted: var(--muted);
-    --color-muted-foreground: var(--muted-foreground);
-    --color-accent: var(--accent);
-    --color-accent-foreground: var(--accent-foreground);
-    --color-destructive: var(--destructive);
-    --color-destructive-foreground: var(--destructive-foreground);
-    --color-border: var(--border);
-    --color-input: var(--input);
-    --color-ring: var(--ring);
-    --color-chart-1: var(--chart-1);
-    --color-chart-2: var(--chart-2);
-    --color-chart-3: var(--chart-3);
-    --color-chart-4: var(--chart-4);
-    --color-chart-5: var(--chart-5);
-    --radius-sm: calc(var(--radius) - 4px);
-    --radius-md: calc(var(--radius) - 2px);
-    --radius-lg: var(--radius);
-    --radius-xl: calc(var(--radius) + 4px);
-    --color-sidebar: var(--sidebar);
-    --color-sidebar-foreground: var(--sidebar-foreground);
-    --color-sidebar-primary: var(--sidebar-primary);
-    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-    --color-sidebar-accent: var(--sidebar-accent);
-    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-    --color-sidebar-border: var(--sidebar-border);
-    --color-sidebar-ring: var(--sidebar-ring);
-    --radius-2xl: calc(var(--radius) + 8px);
-    --radius-3xl: calc(var(--radius) + 12px);
-    --radius-4xl: calc(var(--radius) + 16px);
+  /* Surfaces */
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-elevated: var(--elevated);
+  --color-subtle: var(--subtle);
+
+  /* Borders */
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input-border: var(--input-border);
+
+  /* Text */
+  --color-foreground: var(--foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted-foreground: var(--muted-foreground);
+
+  /* Accent */
+  --color-accent: var(--accent);
+  --color-accent-solid: var(--accent-solid);
+  --color-accent-solid-hover: var(--accent-solid-hover);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-subtle: var(--accent-subtle);
+
+  /* Semantic */
+  --color-destructive: var(--destructive);
+  --color-destructive-hover: var(--destructive-hover);
+  --color-destructive-subtle: var(--destructive-subtle);
+  --color-warning: var(--warning);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-info: var(--info);
+  --color-info-subtle: var(--info-subtle);
+
+  /* Brand exception */
+  --color-twitch: var(--twitch);
+  --color-twitch-hover: var(--twitch-hover);
+
+  /* Fonts (DESIGN.md §4.1) */
+  --font-sans:
+    "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Radius scale (DESIGN.md §7) — closed set, no rounded-xl/2xl/3xl */
+  --radius-sm: 2px;
+  --radius: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
 }
 
 @layer base {
-    * {
-        @apply border-border;
-    }
-    body {
-        @apply bg-background text-foreground;
-        font-family:
-            system-ui,
-            -apple-system,
-            BlinkMacSystemFont,
-            "Segoe UI",
-            Roboto,
-            "Helvetica Neue",
-            Arial,
-            sans-serif;
-    }
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  /* Thin scrollbar for horizontal board (DESIGN.md §11.4) */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  *::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--border-strong);
+    border-radius: 4px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
 }
 
-@layer base {
-    * {
-        @apply border-border outline-ring/50;
-    }
-    body {
-        @apply bg-background text-foreground;
-    }
+/* Reduced motion (DESIGN.md §14) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
